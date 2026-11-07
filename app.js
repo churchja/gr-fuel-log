@@ -155,6 +155,7 @@
   }
   async function sendCode(email) {
     const s = S.signin; s.email = email.trim().toLowerCase(); s.error = ""; s.busy = true; render();
+    if (!/^[^\s@.]+(\.[^\s@.]+)*@[^\s@.]+(\.[^\s@.]+)+$/.test(s.email)) { s.busy = false; s.error = "That email address doesn't look right. Check for typos like a double dot."; render(); return; }
     if (CFG.turnstileSiteKey && !s.captcha) { s.busy = false; s.error = "Finish the bot check above, then send the code."; render(); return; }
     const { error } = await sb.auth.signInWithOtp({ email: s.email, options: { shouldCreateUser: true, captchaToken: s.captcha || undefined } });
     s.busy = false; s.captcha = "";
