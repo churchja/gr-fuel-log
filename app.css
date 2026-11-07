@@ -120,3 +120,15 @@ td { padding: 8px 0; border-top: 1px solid var(--line); } td.n, th.n { text-alig
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 [hidden] { display: none !important; }
+/* Station picker and station page */
+div.field { display: grid; gap: 4px; font-size: 13px; font-weight: 500; color: var(--muted); min-width: 0; }
+.pickbtn { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 46px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunken); color: var(--ink); font: 500 17px/1.2 var(--body); text-align: left; cursor: pointer; }
+.pickbtn.hl { background: var(--highlight); border-color: var(--accent); }
+.pickbtn svg { flex: none; color: var(--muted); }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; width: 100%; padding: 12px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.card.list > .srow:first-of-type, .card.list > h2 + .srow { border-top: 0; }
+.srow b { overflow-wrap: anywhere; }
+.srow .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.srow .chip.target { font-size: 13px; padding: 6px 9px; }
+.srow .dist { font: 600 16px/1.2 var(--display); color: var(--muted); white-space: nowrap; padding-top: 1px; }
+.spark { display: block; width: 100%; height: 44px; color: var(--accent-text); }

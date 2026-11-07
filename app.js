@@ -30,7 +30,8 @@
   const S = {
     ready: false, user: null, profile: null, settings: C.withDefaults({}), fills: [], oil: [], car: null, myStations: [], stations: [], quota: null,
     community: null, communityDays: 90, admin: null, view: "pump", offline: !navigator.onLine, flash: "",
-    pump: { dte: "", sensor: "", which: "primary" },
+    pump: { dte: "", sensor: "", which: "primary", other: null },
+    known: [], picker: null, loc: null, geoPerm: "unknown", stationId: null, stationDetail: null, pumpSuggest: null,
     form: null, oilForm: null, carForm: null,
     signin: { step: "email", email: store.get("last-email") || "", code: "", error: "", busy: false, captcha: "" },
   };
@@ -41,7 +42,7 @@
   // ---------- data ----------
   async function loadAll() {
     const uid = S.user.id;
-    const [p, f, o, c, ms, st, q] = await Promise.all([
+    const [p, f, o, c, ms, st, q, kn] = await Promise.all([
       sb.from("profiles").select("*").eq("id", uid).single(),
       sb.from("fills").select("*").order("date").order("odometer"),
       sb.from("oil_changes").select("*").order("date"),
@@ -49,10 +50,11 @@
       sb.from("my_stations").select("*"),
       sb.from("station_estimates").select("*"),
       sb.rpc("receipt_quota"),
+      sb.rpc("stations_known", { p_lat: null, p_lon: null }),
     ]);
     S.profile = p.data || null;
     S.settings = C.withDefaults(S.profile && S.profile.settings);
-    S.fills = f.data || []; S.oil = o.data || []; S.car = c.data || null; S.myStations = ms.data || []; S.stations = st.data || []; S.quota = q.data || null;
+    S.fills = f.data || []; S.oil = o.data || []; S.car = c.data || null; S.myStations = ms.data || []; S.stations = st.data || []; S.quota = q.data || null; S.known = kn.data || [];
     if (S.pump.sensor === "") { const last = C.deriveRows(S.fills, S.settings).slice(-1)[0]; if (last && last.blend !== null) S.pump.sensor = String(Math.round(last.blend)); }
   }
   async function reloadFills() {
@@ -70,17 +72,20 @@
   async function refreshQuota() { const q = await sb.rpc("receipt_quota"); if (q.data) S.quota = q.data; }
 
   // ---------- routing ----------
-  const VIEWS = ["pump", "log", "history", "community", "more", "oil", "learned", "car", "admin"];
+  const VIEWS = ["pump", "log", "history", "community", "more", "oil", "learned", "car", "admin", "station"];
   function go(view) { if (location.hash !== "#" + view) location.hash = view; else { S.view = view; render(); } }
   function route() {
     let v = location.hash.replace("#", "") || "pump";
     if (!VIEWS.includes(v)) v = "pump";
     if (v === "admin" && !isAdmin()) v = "more";
-    S.view = v;
+    if (v === "station" && !S.stationId) v = "community";
+    S.view = v; S.picker = null;
     if (v === "log" && !S.form) S.form = newForm();
     if (v === "community" && !S.community) loadCommunity();
     if (v === "admin") loadAdmin();
     if (v === "car") S.carForm = null;
+    if (v === "station" && !S.stationDetail) loadStation();
+    if (v === "pump" && approved()) maybeSuggest();
     render();
     window.scrollTo(0, 0);
   }
@@ -94,17 +99,18 @@
     else if (!S.user) html = vSignin();
     else if (!S.profile) html = `<p class="muted">Setting up your account…</p>`;
     else if (S.profile.status !== "approved") html = vPending();
+    else if (S.picker) html = vPicker();
     else if (needsSetup()) html = vCar(true);
-    else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, oil: vOil, learned: vLearned, car: () => vCar(false), admin: vAdmin }[S.view])();
+    else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, oil: vOil, learned: vLearned, car: () => vCar(false), admin: vAdmin, station: vStation }[S.view])();
     document.body.classList.toggle("signin", !S.user || (S.profile && S.profile.status !== "approved"));
     app.innerHTML = html;
-    $("#tabs").hidden = !(S.user && approved() && !needsSetup());
+    $("#tabs").hidden = !(S.user && approved() && !needsSetup() && !S.picker);
     if (!$("#tabs").hidden) renderTabs();
     if (!S.user) mountTurnstile();
-    if (S.view === "pump" && approved()) renderReadout();
+    if (S.view === "pump" && approved() && !S.picker) renderReadout();
   }
   function renderTabs() {
-    const tab = { pump: "pump", log: "log", history: "history", community: "community" }[S.view] || "more";
+    const tab = { pump: "pump", log: "log", history: "history", community: "community", station: "community" }[S.view] || "more";
     $("#tabs").innerHTML = `<nav aria-label="Sections">${[["pump", "Pump"], ["log", "Log"], ["history", "History"], ["community", "Community"], ["more", "More"]]
       .map(([id, label]) => `<a href="#${id}" aria-current="${tab === id ? "page" : "false"}">${icon(id === "log" ? "log" : id)}<span>${label}</span></a>`).join("")}</nav>`;
   }
@@ -194,17 +200,20 @@
         <div class="stack"><span class="small muted" id="stLabel">E85 station</span>
           <div class="seg" role="group" aria-labelledby="stLabel">
             <button type="button" data-act="which" data-w="primary" aria-pressed="${S.pump.which === "primary"}">${s.primaryE85 ? "Primary · " + esc(s.primaryE85) : "Primary"}</button>
-            <button type="button" data-act="which" data-w="other" aria-pressed="${S.pump.which === "other"}">Other station</button>
-          </div></div>
+            <button type="button" data-act="which" data-w="other" aria-pressed="${S.pump.which === "other"}">${S.pump.other ? "Other · " + esc(S.pump.other.name) : "Other station"}</button>
+          </div>
+          ${S.pump.which === "other" ? `<button type="button" class="link" data-act="pickOther" style="justify-self:start">${S.pump.other ? "Change station" : "Choose the station"}</button>` : ""}
+          ${s.primaryE85 && !s.primaryE85Id ? `<p class="small muted">Your primary station isn't matched to the shared station list yet. <a class="link" href="#car">Match it</a> so members' data lines up.</p>` : ""}</div>
         <p class="small muted">Gas: ${esc(s.primaryGas || "your gas station")} · ${s.ethanolFree ? "ethanol-free " : ""}${s.gasGrade} octane (E${C.gasEthanol(s)})</p>
       </section>
+      <div id="pumpSuggest">${suggestHtml()}</div>
       <section class="dark readout" id="readout" aria-live="polite"></section>
       <div id="planWarn" class="gap"></div>
       <button class="btn primary full" id="logPlan" data-act="logPlan" disabled>Log this fill</button>`;
   }
   function currentPlan() {
     const s = S.settings, dte = num(S.pump.dte), sensor = num(S.pump.sensor);
-    const as = C.e85Assumption({ which: S.pump.which, settings: s, myStations: S.myStations, stations: S.stations, car: S.car, today: today() });
+    const as = C.e85Assumption({ which: S.pump.which, other: S.pump.other, settings: s, myStations: S.myStations, stations: S.stations, car: S.car, today: today() });
     if (dte === null || sensor === null || dte < 0 || sensor < 0 || sensor > 100) return { as, p: null };
     const p = C.plan({ dte, sensor, target: s.target, tuneLimit: s.tuneLimit, e85: as.value, e85Sd: as.sd, gasEth: C.gasEthanol(s), car: S.car });
     return { as, p, dte, sensor };
@@ -246,7 +255,7 @@
   // ---------- log a fill ----------
   function blankStop(kind) {
     const s = S.settings;
-    return { kind, station: kind === "e85" ? s.primaryE85 : kind === "gas" ? s.primaryGas : "", grade: s.gasGrade, ethanol: kind === "gas" ? null : "", fuelName: "",
+    return { kind, station: kind === "e85" ? s.primaryE85 : kind === "gas" ? s.primaryGas : "", station_id: kind === "e85" ? s.primaryE85Id : kind === "gas" ? s.primaryGasId : "", grade: s.gasGrade, ethanol: kind === "gas" ? null : "", fuelName: "",
       gallons: "", price: "", total: "", totalManual: false, note: "", noteKind: "", hl: {}, image: null, offerClaude: false, busy: false };
   }
   function newForm(fromPlan) {
@@ -255,7 +264,7 @@
     if (fromPlan) {
       const { as, p, dte, sensor } = currentPlan();
       if (p) { f.dte = String(dte); f.sensor_before = String(sensor); f.plan = { e85: p.e85gal, predicted: C.r1(p.predicted), e85Assumed: Math.round(as.value) }; f.stops[0].note = `Plan: ${p.e85gal.toFixed(1)} gal of E85, then fill to full with gas.`; }
-      if (S.pump.which === "other") f.stops[0].station = "";
+      if (S.pump.which === "other") { f.stops[0].station = S.pump.other ? S.pump.other.name : ""; f.stops[0].station_id = S.pump.other ? S.pump.other.id : ""; }
     }
     return f;
   }
@@ -266,9 +275,7 @@
   }
   function vLog() {
     const f = S.form;
-    const stations = [...new Set([S.settings.primaryE85, S.settings.primaryGas, ...S.fills.flatMap((x) => (x.stops || []).map((s) => s.station)), ...S.stations.map((s) => s.display_name)].filter(Boolean))];
     return `<header class="head"><h1>${f.id ? "Edit fill" : "Log a fill"}</h1><span class="chip target">Target E${esc(f.target)}</span></header>
-      <datalist id="stationList">${stations.map((s) => `<option value="${esc(s)}">`).join("")}</datalist>
       <form class="gap" data-form="saveFill" novalidate>
         <section class="card">
           <div class="grid2">
@@ -312,7 +319,7 @@
       ${st.kind === "other" ? `<div class="grid2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)"><label class="field" for="fn${i}">What fuel<input id="fn${i}" type="text" data-s="fuelName" data-i="${i}" value="${esc(st.fuelName)}" placeholder="Race fuel, blender pump E30…"></label>
         <label class="field" for="oe${i}">Ethanol %<input id="oe${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" class="${hl("ethanol")}"></label></div>
         <p class="note">For ethanol-free gas, race fuel, a blender pump or any blend that isn't your usual. The math uses the ethanol % you enter.</p>` : ""}
-      <label class="field" for="st${i}">Station<input id="st${i}" type="text" list="stationList" autocomplete="off" data-s="station" data-i="${i}" value="${esc(st.station)}" class="${hl("station")}"></label>
+      <div class="field"><span id="stl${i}">Station</span><button type="button" id="st${i}" class="pickbtn ${hl("station")}" data-act="pickStation" data-i="${i}" aria-labelledby="stl${i} st${i}"><span class="stack" style="gap:2px;min-width:0">${st.station ? esc(st.station) : `<span class="muted">Choose station</span>`}${st.station && !st.station_id ? `<span class="small muted">Not matched to the shared list. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button></div>
       <div class="grid3">
         <label class="field" for="ga${i}">Gallons<input id="ga${i}" type="number" inputmode="decimal" step="0.001" data-s="gallons" data-i="${i}" value="${esc(st.gallons)}" class="${hl("gallons")}"></label>
         <label class="field" for="pr${i}">$ per gal<input id="pr${i}" type="number" inputmode="decimal" step="0.001" data-s="price" data-i="${i}" value="${esc(st.price)}" class="${hl("price")}"></label>
@@ -336,6 +343,7 @@
       const g = num(st.gallons), p = num(st.price); let t = num(st.total);
       if (t === null && g !== null && p !== null) t = Math.round(g * p * 100) / 100;
       const out = { kind: st.kind, station: String(st.station || "").trim(), gallons: g, price: p, total: t };
+      if (st.station_id) out.station_id = st.station_id;
       if (st.kind === "gas") { out.grade = Number(st.grade) || S.settings.gasGrade; if (num(st.ethanol) !== null) out.ethanol = num(st.ethanol); }
       if (st.kind === "other") { out.fuelName = String(st.fuelName || "").trim(); out.ethanol = num(st.ethanol); }
       return out;
@@ -389,7 +397,10 @@
     else if (r.fuel === "gas") { st.kind = "gas"; if (r.octane) st.grade = r.octane; filled.push("fuel"); }
     else if (r.fuel === "other") st.kind = "other";
     if (num(r.ethanol ?? r.ethanol_percent) !== null && st.kind !== "e85") st.ethanol = num(r.ethanol ?? r.ethanol_percent);
-    if (r.station) { st.station = matchStation(r.station); st.hl.station = 1; filled.push("station"); }
+    if (r.station) {
+      if (!st.station_id) { const m = matchKnown(r.station); if (m) { st.station = m.name; st.station_id = m.id; } else st.station = matchStation(r.station); }
+      st.hl.station = 1; filled.push("station");
+    }
     const g = num(r.gallons), p = num(r.price ?? r.price_per_gallon), t = num(r.total);
     if (g !== null && g > 0 && g < 40) { st.gallons = String(g); st.hl.gallons = 1; filled.push("gallons"); } else st.hl.gallons = "missing";
     if (p !== null && p > 0 && p < 15) { st.price = String(p); st.hl.price = 1; filled.push("price"); }
@@ -472,7 +483,7 @@
 
   // ---------- community ----------
   async function loadCommunity() {
-    const { data } = await sb.rpc("community_stats", { p_days: S.communityDays || null });
+    const [{ data }] = await Promise.all([sb.rpc("community_stats", { p_days: S.communityDays || null }), loadKnown()]);
     S.community = data || { owners: 0, stations: [], blends: [], grades: [] };
     if (S.view === "community") render();
   }
@@ -485,13 +496,17 @@
     const stations = c.stations.length ? c.stations.map((s) => `<div class="stack" style="gap:6px"><div class="head"><span>${esc(s.name)}</span><span class="big" style="font:700 28px/1 var(--display)">E${s.value}</span></div>
         <div class="bar"><div class="fill" style="width:${pos(s.value)}"></div>${s.switch_from ? `<div class="was" style="left:${pos(s.switch_from)}"></div>` : ""}</div>
         <span class="small soft">${s.switch_date ? `Switched from E${s.switch_from} on ${fmtShort(s.switch_date)} · ` : ""}${s.n} fills from ${s.owners} owners</span></div>`).join("")
-      : `<p class="soft">No station has fills from 2 or more sharing owners yet. Stations show up here once they do.</p>`;
+      : `<p class="soft">No station has a measured E85 strength yet. It's worked out from fills with flex sensor readings before and after.</p>`;
     const blends = c.blends.length ? `<table><thead><tr><th>Blend</th><th class="n">$/mile</th><th class="n">MPG</th><th class="n">Fills</th></tr></thead><tbody>${c.blends.map((b) => `<tr><td>${esc(b.label)}</td><td class="n">$${Number(b.cpm).toFixed(3)}</td><td class="n">${b.mpg ?? "—"}</td><td class="n">${b.n}</td></tr>`).join("")}</tbody></table>` : `<p class="muted small">Shows once a blend range has fills from 2 or more owners.</p>`;
     const grades = c.grades.length ? `<div class="grid3">${c.grades.map((g) => `<div class="stat"><b style="font-size:22px">$${Number(g.cpm).toFixed(3)}</b><span>${esc(g.grade)} octane</span></div>`).join("")}</div>` : `<p class="muted small">Shows once a grade has fills from 2 or more owners.</p>`;
-    return head + `<section class="dark"><h2>Real E85 strength by station</h2>${stations}<p class="small dim">Bar runs from E50 to E85. Grey tick: the reading before the last blend switch.</p></section>
+    const known = S.known || [];
+    const shown = S.allStations ? known : known.slice(0, 8);
+    const stationList = `<section class="card list"><h2 style="padding-top:10px">Stations members use</h2>${known.length ? shown.map((k) => stationRow(k, "openStation")).join("") : `<p class="small muted" style="padding-bottom:10px">Stations show up here once a member logs a fill there.</p>`}
+      ${known.length > shown.length ? `<button type="button" class="link" data-act="allStations" style="padding-bottom:12px">Show all ${known.length}</button>` : ""}</section>`;
+    return head + stationList + `<section class="dark"><h2>Real E85 strength by station</h2>${stations}<p class="small dim">Bar runs from E50 to E85. Grey tick: the reading before the last blend switch.</p></section>
       <section class="card"><h2>Cost per mile by blend</h2>${blends}</section>
       <section class="card"><h2>Cost per mile by gas grade</h2>${grades}${c.on_target !== null && c.on_target !== undefined ? `<p><b>${c.on_target}%</b> of shared fills landed within 3 points of their owner's target.</p>` : ""}</section>
-      <section class="card" style="background:var(--sunken)"><p class="small"><b>${S.settings.share ? "Your fills are shared." : "Your fills are private."}</b> Only the month, station, blend, E85 strength, mpg, cost per mile and pump prices leave a log. No location is ever shown.</p><a href="#car" class="link">Change sharing</a></section>`;
+      <section class="card" style="background:var(--sunken)"><p class="small"><b>${S.settings.share ? "Your fills are shared." : "Your fills are private."}</b> Only the month, station, blend, E85 strength, mpg, cost per mile and pump prices leave a log. Stations show their name and address, but never who fills there.</p><a href="#car" class="link">Change sharing</a></section>`;
   }
 
   // ---------- more, oil, learned ----------
@@ -563,7 +578,7 @@
     const pos = (v) => ((Math.min(85, Math.max(50, v)) - 50) / 35 * 100).toFixed(1) + "%";
     const rows = S.myStations.map((m) => {
       const pm = Math.max(1, Math.round(Number(m.sd)));
-      const isPrimary = C.stationKey(s.primaryE85) === m.station_key;
+      const isPrimary = C.keyFor(s.primaryE85Id, s.primaryE85) === m.station_key;
       return `<div class="stack" style="gap:6px"><div class="head"><span>${isPrimary ? "Primary · " : ""}${esc(m.display_name)}</span><span class="big" style="font:700 26px/1 var(--display)">E${Math.round(m.value)} ±${pm}</span></div>
         <div class="bar"><div class="rng" style="left:${pos(m.value - pm)};width:${(2 * pm / 35 * 100).toFixed(1)}%"></div><div class="tick" style="left:${pos(m.value)}"></div></div>
         <span class="small soft">${m.n_total} fill${m.n_total === 1 ? "" : "s"}: ${m.n_mine} yours${m.n_total > m.n_mine ? `, ${m.n_total - m.n_mine} from other owners` : ""}.${m.switch_date ? ` Blend switch spotted ${fmtShort(m.switch_date)}, from E${Math.round(m.switch_from)} to E${Math.round(m.switch_to)}.` : ""}${m.last_value !== null ? ` Last measured E${Math.round(m.last_value)} on ${fmtShort(m.last_date)}.` : ""}</span></div>`;
@@ -593,6 +608,7 @@
     const f = S.carForm || (S.carForm = { ...S.settings, tuneLimit: S.settings.tuneLimitNotSure ? "50ns" : S.settings.tuneLimit, handle: S.profile.handle || "", error: "" });
     const seg = (key, opts, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([v, l]) => `<button type="button" data-act="set" data-k="${key}" data-v="${v}" aria-pressed="${String(f[key]) === String(v)}">${l}</button>`).join("")}</div>`;
     const mx = C.maxTarget({ tuneLimit: Number(String(f.tuneLimit).replace("ns", "")) });
+    const pickField = (label, key, kind, id) => `<div class="field"><span id="${id}-l">${label}</span><button type="button" id="${id}" class="pickbtn" data-act="pickPrimary" data-p="${kind}" aria-labelledby="${id}-l ${id}"><span class="stack" style="gap:2px;min-width:0">${f[key] ? esc(f[key]) : `<span class="muted">Choose station</span>`}${f[key] && !f[key + "Id"] ? `<span class="small muted">Not matched to the shared list yet. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button></div>`;
     return `<div class="stack"><h1>${first ? "Set up your car" : "Your car"}</h1><p class="muted">${first ? "A few answers so the pump plan fits your car. You can change any of it later." : "Change any of it here."}</p></div>
       <form class="gap" data-form="saveCar" novalidate>
         <section class="card"><h2>Blend</h2>
@@ -605,9 +621,8 @@
           <div class="stack"><b>Gas grade you mix with</b>${seg("gasGrade", C.GRADES.map((g) => [g, g]), "Gas grade")}</div>
           <label class="check" for="c-e0"><input id="c-e0" type="checkbox" data-c="ethanolFree" ${f.ethanolFree ? "checked" : ""}>Ethanol-free (E0)</label>
           <p class="small muted">The math uses your gas's own ethanol: E10 for most grades, E15 for Unleaded 88, none when ethanol-free.</p>
-          <label class="field" for="c-e85">Primary E85 station<input id="c-e85" type="text" list="stationsAll" data-c="primaryE85" value="${esc(f.primaryE85)}" placeholder="For example MotoMart E Lloyd"></label>
-          <label class="field" for="c-gas">Primary gas station<input id="c-gas" type="text" list="stationsAll" data-c="primaryGas" value="${esc(f.primaryGas)}"></label>
-          <datalist id="stationsAll">${S.stations.map((s) => `<option value="${esc(s.display_name)}">`).join("")}</datalist>
+          ${pickField("Primary E85 station", "primaryE85", "e85", "c-e85")}
+          ${pickField("Primary gas station", "primaryGas", "gas", "c-gas")}
         </section>
         <section class="card"><h2>Oil change reminder</h2><div class="grid2">
           <label class="field" for="c-om">Every (miles)<input id="c-om" type="number" inputmode="numeric" data-c="oilMiles" value="${esc(f.oilMiles)}"></label>
@@ -638,7 +653,8 @@
     for (const k of ["target", "tuneLimit", "gasGrade", "oilMiles", "oilMonths"]) s[k] = Number(String(f[k]).replace("ns", ""));
     s.tuneLimitNotSure = String(f.tuneLimit) === "50ns";
     Object.assign(s, { ethanolFree: !!f.ethanolFree, primaryE85: String(f.primaryE85 || "").trim(), primaryGas: String(f.primaryGas || "").trim(), receiptMode: f.receiptMode, share: !!f.share });
-    if (!s.primaryE85) { f.error = "Enter the station where you usually buy E85."; return render(); }
+    s.primaryE85Id = s.primaryE85 ? String(f.primaryE85Id || "") : ""; s.primaryGasId = s.primaryGas ? String(f.primaryGasId || "") : "";
+    if (!s.primaryE85) { f.error = "Choose the station where you usually buy E85."; return render(); }
     if (!(s.oilMiles >= 500 && s.oilMiles <= 20000) || !(s.oilMonths >= 1 && s.oilMonths <= 24)) { f.error = "Check the oil change interval."; return render(); }
     s.target = Math.min(s.target, C.maxTarget(s));
     if (!(await saveSettings(s, String(f.handle || "").trim()))) { f.error = "Couldn't save. Check your connection and try again."; return render(); }
@@ -677,14 +693,221 @@
         <p class="small muted">Emailed to ${esc(c.admin_email)} from ${esc(c.mail_from)}.</p></section>`;
   }
 
+  // ---------- stations ----------
+  // One shared record per station, named Brand · Street. A station shows up for every member once a member who
+  // shares has logged a fill there. The phone's location only sorts stations and spots duplicates; fills never store it.
+  const BRANDS = ["7-Eleven", "BP", "Buc-ee's", "Casey's", "Chevron", "Circle K", "Citgo", "Costco", "Exxon", "Flying J", "GetGo", "Holiday", "Huck's", "Hy-Vee", "Kroger", "Kum & Go", "Kwik Trip", "Love's", "Marathon", "Maverik", "Meijer", "Mobil", "MotoMart", "Murphy USA", "Phillips 66", "Pilot", "QuikTrip", "RaceTrac", "Sam's Club", "Sheetz", "Shell", "Speedway", "Sunoco", "Thorntons", "Valero", "Walmart", "Wawa"];
+  const distTxt = (m) => (m === null || m === undefined ? "" : m < 160 ? `${Math.max(10, Math.round((m * 3.281) / 10) * 10)} ft` : `${(m / 1609.34).toFixed(m < 16000 ? 1 : 0)} mi`);
+  const monthTxt = (ym) => { if (!ym) return ""; const [y, m] = String(ym).split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+  const previewName = (f) => [String(f.brand || "").trim() || "Brand", String(f.street || "").trim()].filter(Boolean).join(" · ");
+  function watchGeoPermission() {
+    try { navigator.permissions.query({ name: "geolocation" }).then((p) => { S.geoPerm = p.state; p.onchange = () => { S.geoPerm = p.state; }; }, () => {}); } catch { /* not supported */ }
+  }
+  function locate() {
+    return new Promise((resolve, reject) => {
+      if (S.loc && Date.now() - S.loc.at < 120000) return resolve(S.loc);
+      if (!navigator.geolocation) return reject({ code: 0 });
+      navigator.geolocation.getCurrentPosition((p) => { S.loc = { lat: p.coords.latitude, lon: p.coords.longitude, at: Date.now() }; resolve(S.loc); }, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    });
+  }
+  async function loadKnown() {
+    const { data, error } = await sb.rpc("stations_known", { p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
+    if (!error) S.known = data || [];
+    return !error;
+  }
+  function fuelChips(c, max = 3) {
+    return (c.fuels || []).slice(0, max).map((f) => `<span class="chip ${f.fuel === "E85" ? "on" : "none"}">${esc(f.fuel.replace(" octane", ""))}${f.price ? ` · $${Number(f.price).toFixed(2)}` : ""}</span>`).join("");
+  }
+  function stationRow(c, act) {
+    const sub = [[c.city, c.state].filter(Boolean).join(", "), c.members ? `${c.members} member${c.members === 1 ? "" : "s"}` : "", c.mine ? "you've used it" : ""].filter(Boolean).join(" · ");
+    const e85 = c.e85 ? `<span class="chip target">E${Math.round(c.e85.value)}</span>` : "";
+    return `<button type="button" class="srow" data-act="${act}" data-id="${esc(c.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(c.name)}</b>${sub ? `<span class="small muted">${esc(sub)}</span>` : ""}${e85 || (c.fuels || []).length ? `<span class="badges">${e85}${fuelChips(c)}</span>` : ""}</span><span class="dist">${distTxt(c.distance_m)}</span></button>`;
+  }
+  function matchKnown(text) {
+    const words = C.stationKey(text).split(" ").filter((w) => w.length > 2);
+    const hits = (S.known || []).filter((c) => words.some((w) => C.stationKey(`${c.brand || ""} ${c.name}`).split(" ").includes(w)));
+    return hits.sort((a, b) => (a.distance_m ?? 1e9) - (b.distance_m ?? 1e9) || b.members - a.members)[0] || null;
+  }
+
+  // The picker: choose a station members use, or add one in the standard Brand · Street form.
+  function openPicker(target, kind) {
+    S.picker = { target, kind, q: "", step: "list", busy: false, error: "", locState: S.loc && Date.now() - S.loc.at < 120000 ? "ok" : "idle", cands: null, mapNote: "", form: null, scrollY: window.scrollY };
+    try { history.pushState({ picker: true }, ""); } catch { /* ignore */ }
+    render(); window.scrollTo(0, 0);
+    refreshKnown(S.picker, S.geoPerm === "granted" && S.picker.locState !== "ok");
+  }
+  async function refreshKnown(p, withLocation) {
+    p.busy = true; renderPicker();
+    if (withLocation) { try { await locate(); p.locState = "ok"; } catch (e) { p.locState = e && e.code === 1 ? "denied" : "error"; } }
+    const ok = await loadKnown();
+    if (S.picker !== p) return;
+    p.busy = false; if (!ok) p.error = "Couldn't load stations. Check your connection and try again.";
+    renderPicker();
+  }
+  function closePicker() {
+    const p = S.picker; S.picker = null; render();
+    if (p) window.scrollTo(0, p.scrollY || 0);
+    try { if (history.state && history.state.picker) history.back(); } catch { /* ignore */ }
+  }
+  window.addEventListener("popstate", () => { if (S.picker) { const y = S.picker.scrollY; S.picker = null; render(); window.scrollTo(0, y || 0); } });
+  function applyStation(label, id) {
+    const t = S.picker.target;
+    if (t.type === "stop" && S.form && S.form.stops[t.i]) { const st = S.form.stops[t.i]; st.station = label; st.station_id = id; if (st.hl) delete st.hl.station; }
+    else if (t.type === "pumpOther") { S.pump.other = { id, name: label }; S.pump.which = "other"; }
+    else if (t.type === "primaryE85" && S.carForm) { S.carForm.primaryE85 = label; S.carForm.primaryE85Id = id; }
+    else if (t.type === "primaryGas" && S.carForm) { S.carForm.primaryGas = label; S.carForm.primaryGasId = id; }
+    closePicker();
+  }
+  function pickerChoose(id) {
+    const p = S.picker;
+    const c = (p.step === "list" ? S.known : p.cands || []).find((x) => x.id === id) || (S.known || []).find((x) => x.id === id);
+    if (!c) return;
+    if (!c.standardized) { p.from = p.step; p.step = "confirm"; p.error = ""; p.form = { id: c.id, brand: c.brand || "", street: c.street || "" }; render(); return; }
+    applyStation(c.name, c.id);
+  }
+  function vPicker() {
+    const p = S.picker;
+    const what = p.kind === "e85" ? "E85 station" : p.kind === "gas" ? "Gas station" : "Station";
+    return `<header class="head"><div class="stack"><span class="eyebrow">${p.step === "list" ? "Choose a station" : p.step === "confirm" ? "Confirm the name" : "Add a station"}</span><h1>${what}</h1></div><button type="button" class="btn" data-act="pickerClose">Close</button></header>
+      ${p.step === "list" ? `<label class="field" for="pickQ">Search stations<input id="pickQ" type="search" autocomplete="off" value="${esc(p.q)}" placeholder="Brand, street or city"></label>` : ""}
+      <div id="pickBody" class="gap">${pickerBody()}</div>
+      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>`;
+  }
+  function renderPicker() { if (!S.picker) return; const el = $("#pickBody"); if (el) el.innerHTML = pickerBody(); else render(); }
+  function pickerBody() {
+    const p = S.picker;
+    if (p.step === "add") return addBody(p);
+    if (p.step === "confirm") return `<p>This station doesn't have a standard name yet. Check the brand and street. Every member will see them.</p>${nameForm(p, "Confirm the name")}`;
+    const q = C.stationKey(p.q);
+    const list = (S.known || []).filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
+    const loc = p.locState === "ok" ? "" : p.locState === "denied" ? `<p class="small muted">Location is off for this site, so stations are sorted by how many members use them.</p>`
+      : `<button type="button" class="btn full" data-act="pickerLocate">Sort by distance from me</button>`;
+    const rows = list.length ? `<div class="card list">${list.map((c) => stationRow(c, "pickerChoose")).join("")}</div>`
+      : p.busy ? `<p class="small muted"><span class="spinner"></span> Loading stations…</p>`
+      : `<p class="muted">${q ? "No station matches. Add it below." : "No stations yet. Add the one you're using."}</p>`;
+    return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
+  }
+  async function findCandidates(p) {
+    p.locBusy = true; p.error = ""; renderPicker();
+    try { await locate(); p.locState = "ok"; } catch (e) { p.locState = e && e.code === 1 ? "denied" : "error"; p.locBusy = false; return renderPicker(); }
+    const near = async () => { const { data } = await sb.rpc("stations_at", { p_lat: S.loc.lat, p_lon: S.loc.lon, p_radius_m: 200 }); return data || []; };
+    p.cands = await near(); p.locBusy = false; p.mapBusy = true; renderPicker();
+    const r = await sb.functions.invoke("stations", { body: { lat: S.loc.lat, lon: S.loc.lon, radius: 1000 } });
+    if (S.picker !== p) return;
+    p.mapBusy = false;
+    if (r.error || (r.data && r.data.error)) p.mapNote = "The map service didn't answer, so this list may be incomplete. You can still add the station below.";
+    if (r.data && r.data.synced > 0) p.cands = await near();
+    if (S.picker === p) renderPicker();
+  }
+  function addBody(p) {
+    let top;
+    if (p.locState !== "ok") {
+      top = p.locBusy ? `<p class="small muted"><span class="spinner"></span> Finding your location…</p>`
+        : `<p>Are you at the station now? Your location lets the app check the map and catch duplicates.</p><button type="button" class="btn dark full" data-act="pickerHere">I'm at the station · use my location</button>${p.locState === "denied" ? `<p class="small muted">Location is off for this site. You can still add the station without it.</p>` : p.locState === "error" ? `<p class="small muted">Couldn't get your location. You can still add the station without it.</p>` : ""}`;
+    } else {
+      const c = p.cands || [];
+      top = `${p.locBusy ? `<p class="small muted"><span class="spinner"></span> Looking nearby…</p>` : ""}
+        ${c.length ? `<h2>Is it one of these?</h2><div class="card list">${c.map((x) => `<button type="button" class="srow" data-act="pickerChoose" data-id="${esc(x.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(x.name)}</b><span class="small muted">${x.known ? "Members use this station" : "On the map"}${x.standardized ? "" : " · you'll confirm the name"}</span></span><span class="dist">${distTxt(x.distance_m)}</span></button>`).join("")}</div>` : p.locBusy ? "" : `<p class="muted">No stations on file within 200 m of you.</p>`}
+        ${p.mapBusy ? `<p class="small muted"><span class="spinner"></span> Checking the map around you…</p>` : ""}${p.mapNote ? `<p class="small muted">${esc(p.mapNote)}</p>` : ""}`;
+    }
+    if (!p.form || p.form.id) p.form = { id: null, brand: p.q || "", street: "" };
+    return top + nameForm(p, p.locState === "ok" && (p.cands || []).length ? "Not listed? Add it" : "Add it");
+  }
+  function nameForm(p, title) {
+    const f = p.form;
+    const brands = [...new Set([...BRANDS, ...(S.known || []).map((c) => c.brand).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
+    const where = f.id ? "" : p.locState === "ok" ? " at your current location" : ", without a location";
+    return `<form class="card" data-form="pickSave" novalidate><h2>${esc(title)}</h2>
+      <label class="field" for="pickBrand">Brand or station name<input id="pickBrand" type="text" list="brandList" maxlength="60" autocomplete="off" data-pk="brand" value="${esc(f.brand)}" placeholder="MotoMart, Casey's, Costco…"></label>
+      <datalist id="brandList">${brands.map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
+      <label class="field" for="pickStreet">Street or road<input id="pickStreet" type="text" maxlength="80" autocomplete="off" data-pk="street" value="${esc(f.street)}" placeholder="E Lloyd Expy"></label>
+      <p class="small muted">Saved as <b id="pickPreview">${esc(previewName(f))}</b>${where}. Every member sees this name once you log a fill there.</p>
+      ${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}
+      <div class="row"><button class="btn primary grow" type="submit">${f.id ? "Confirm and use" : "Add and use"}</button><button type="button" class="btn" data-act="pickerBack">Back</button></div></form>`;
+  }
+  async function pickerSave() {
+    const p = S.picker, f = p.form; p.error = "";
+    const brand = String(f.brand || "").trim(), street = String(f.street || "").trim();
+    if (brand.length < 2) { p.error = "Enter the brand or station name."; return renderPicker(); }
+    const at = p.locState === "ok" && S.loc;
+    const res = f.id ? await sb.rpc("standardize_station", { p_id: f.id, p_brand: brand, p_street: street })
+      : await sb.rpc("add_station", { p_brand: brand, p_street: street, p_lat: at ? S.loc.lat : null, p_lon: at ? S.loc.lon : null });
+    if (S.picker !== p) return;
+    if (res.error) { p.error = /too many/.test(res.error.message || "") ? "You've added 10 stations today. Try again tomorrow." : "Couldn't save the station. Check your connection and try again."; return renderPicker(); }
+    const c = res.data; S.known = [c, ...(S.known || []).filter((x) => x.id !== c.id)];
+    applyStation(c.name, c.id);
+  }
+
+  // Station page: what members know about one station.
+  function openStation(id) { S.stationId = id; S.stationDetail = null; go("station"); }
+  async function loadStation() {
+    const id = S.stationId; if (!id) return;
+    const { data } = await sb.rpc("station_detail", { p_id: id, p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
+    if (S.stationId !== id) return;
+    S.stationDetail = data || { missing: true }; if (S.view === "station") render();
+  }
+  function priceSpark(rows) {
+    if (rows.length < 2) return "";
+    const v = rows.map((r) => Number(r.price)), lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 0.1;
+    const pts = v.map((y, i) => [(i / (v.length - 1)) * 296 + 2, 36 - ((y - lo) / span) * 30]);
+    return `<svg class="spark" viewBox="0 0 300 40" preserveAspectRatio="none" role="img" aria-label="Price trend"><polyline points="${pts.map((q) => q.map((n) => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>${pts.map((q) => `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="2.5" fill="currentColor"></circle>`).join("")}</svg>`;
+  }
+  function vStation() {
+    const d = S.stationDetail;
+    if (!d) return `<a class="link" href="#community">← Community</a><p class="muted">Loading station…</p>`;
+    if (d.missing || !d.card) return `<a class="link" href="#community">← Community</a><p class="muted">This station isn't available.</p>`;
+    const c = d.card;
+    const addr = [c.street, [c.city, c.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+    const fuels = c.fuels.length ? `<table><thead><tr><th>Fuel</th><th class="n">Latest price</th><th class="n">Last seen</th></tr></thead><tbody>${c.fuels.map((f) => `<tr><td>${esc(f.fuel)}</td><td class="n">${f.price ? `$${Number(f.price).toFixed(2)}<br><span class="small muted">${monthTxt(f.price_month)}</span>` : "—"}</td><td class="n">${monthTxt(f.last_month)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted small">No fills logged here yet.</p>`;
+    const e = c.e85;
+    const e85 = e ? `<section class="dark"><h2>Real E85 strength</h2><span class="big" style="font:700 40px/1 var(--display)">E${Math.round(e.value)} <span style="font-size:22px">±${Math.max(1, Math.round(e.sd))}</span></span><p class="small soft">Measured from ${e.n} fill${e.n === 1 ? "" : "s"}${e.last_month ? `, latest ${monthTxt(e.last_month)}` : ""}.${e.switch_month ? ` Blend switch spotted ${monthTxt(e.switch_month)}, from E${e.switch_from} to E${e.switch_to}.` : ""}</p></section>`
+      : c.fuels.some((f) => f.fuel === "E85") ? `<section class="dark"><h2>Real E85 strength</h2><p class="small soft">Not measured yet. It's worked out from fills with flex sensor readings before and after filling.</p></section>` : "";
+    const byFuel = new Map();
+    for (const r of d.prices) { if (!byFuel.has(r.fuel)) byFuel.set(r.fuel, []); byFuel.get(r.fuel).push(r); }
+    const hist = byFuel.size ? [...byFuel.entries()].map(([fuel, rows]) => `<div class="stack" style="gap:6px"><b>${esc(fuel)}</b>${priceSpark(rows)}<span class="small muted">${rows.slice(-4).map((r) => `${monthTxt(r.month)}: $${Number(r.price).toFixed(2)}`).join(" · ")}</span></div>`).join("")
+      : `<p class="muted small">Prices show up as members log fills here.</p>`;
+    return `<a class="link" href="#community">← Community</a>
+      <div class="stack"><h1>${esc(c.name)}</h1><p class="muted">${esc(addr || "No address on file")}${c.distance_m !== null && c.distance_m !== undefined ? ` · ${distTxt(c.distance_m)} away` : ""}</p>
+        <p class="small muted">${c.members} member${c.members === 1 ? "" : "s"} fill here${c.mine ? ` · you've logged ${c.mine} stop${c.mine === 1 ? "" : "s"} here` : ""}</p></div>
+      ${e85}
+      <section class="card"><h2>Fuels sold here</h2>${fuels}</section>
+      <section class="card"><h2>Price history</h2>${hist}</section>
+      <p class="small muted">From fills logged by members who share. Other members' prices are shown by month, and who filled where is never shown.</p>`;
+  }
+
+  // Pump plan: notice when you're standing at a known E85 station that isn't your primary.
+  const suggestHtml = () => (S.pumpSuggest ? `<div class="banner info"><span>At ${esc(S.pumpSuggest.name)}?</span><button type="button" class="link" data-act="useSuggest">Use it for this plan</button></div>` : "");
+  async function maybeSuggest() {
+    if (S.geoPerm !== "granted" || (S.suggestAt && Date.now() - S.suggestAt < 120000)) return;
+    S.suggestAt = Date.now();
+    try { await locate(); } catch { return; }
+    if (!(await loadKnown())) return;
+    const c = (S.known || [])[0];
+    const sellsE85 = c && (c.e85 || (c.fuels || []).some((f) => f.fuel === "E85"));
+    S.pumpSuggest = c && c.distance_m !== null && c.distance_m <= 150 && sellsE85 && c.id !== S.settings.primaryE85Id && (!S.pump.other || S.pump.other.id !== c.id) ? c : null;
+    const el = $("#pumpSuggest"); if (el && S.view === "pump") el.innerHTML = suggestHtml();
+  }
+
   // ---------- events ----------
   const ACT = {
     target: async (el) => { const s = { ...S.settings }; s.target = Math.max(30, Math.min(C.maxTarget(s), s.target + Number(el.dataset.d))); S.settings = C.withDefaults(s); $("#tgt").textContent = "E" + s.target; renderReadout(); clearTimeout(ACT._t); ACT._t = setTimeout(() => saveSettings(S.settings), 800); },
-    which: (el) => { S.pump.which = el.dataset.w; document.querySelectorAll('[data-act="which"]').forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === S.pump.which))); renderReadout(); },
+    which: (el) => { if (el.dataset.w === "other" && !S.pump.other) return openPicker({ type: "pumpOther" }, "e85"); S.pump.which = el.dataset.w; render(); },
+    pickOther: () => openPicker({ type: "pumpOther" }, "e85"),
+    pickStation: (el) => { const i = Number(el.dataset.i); openPicker({ type: "stop", i }, S.form.stops[i].kind); },
+    pickPrimary: (el) => openPicker({ type: el.dataset.p === "gas" ? "primaryGas" : "primaryE85" }, el.dataset.p),
+    pickerClose: () => closePicker(),
+    pickerLocate: () => refreshKnown(S.picker, true),
+    pickerChoose: (el) => pickerChoose(el.dataset.id),
+    pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.mapNote = ""; p.form = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
+    pickerHere: () => findCandidates(S.picker),
+    pickerBack: () => { const p = S.picker; p.step = p.step === "confirm" && p.from === "add" ? "add" : "list"; p.form = null; p.error = ""; render(); },
+    openStation: (el) => openStation(el.dataset.id),
+    allStations: () => { S.allStations = true; render(); },
+    useSuggest: () => { const c = S.pumpSuggest; if (!c) return; S.pump.other = { id: c.id, name: c.name }; S.pump.which = "other"; S.pumpSuggest = null; render(); },
     logPlan: () => { S.form = newForm(true); go("log"); },
     addStop: () => { S.form.stops.push(blankStop("gas")); renderStops(); },
     removeStop: (el) => { S.form.stops.splice(Number(el.dataset.i), 1); renderStops(); },
-    stopKind: (el) => { const st = S.form.stops[Number(el.dataset.i)]; st.kind = el.dataset.k; if (st.kind === "e85" && !st.station) st.station = S.settings.primaryE85; if (st.kind === "gas" && !st.station) st.station = S.settings.primaryGas; renderStops(); },
+    stopKind: (el) => { const st = S.form.stops[Number(el.dataset.i)]; st.kind = el.dataset.k; if (st.kind === "e85" && !st.station) { st.station = S.settings.primaryE85; st.station_id = S.settings.primaryE85Id; } if (st.kind === "gas" && !st.station) { st.station = S.settings.primaryGas; st.station_id = S.settings.primaryGasId; } renderStops(); },
     scan: (el) => { const inp = $("#ph" + el.dataset.i); if (inp) inp.click(); },
     claudeRead: (el) => claudeRead(Number(el.dataset.i)),
     cancelFill: () => { S.form = null; go("history"); },
@@ -714,6 +937,8 @@
   document.addEventListener("input", (e) => {
     const el = e.target;
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }
+    if (el.id === "pickQ" && S.picker) { S.picker.q = el.value; renderPicker(); return; }
+    if (el.dataset.pk && S.picker && S.picker.form) { S.picker.form[el.dataset.pk] = el.value; const pv = $("#pickPreview"); if (pv) pv.textContent = previewName(S.picker.form); return; }
     if (el.dataset.f && S.form) { S.form[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; return; }
     if (el.dataset.s && S.form) {
       const i = Number(el.dataset.i), st = S.form.stops[i], k = el.dataset.s;
@@ -746,6 +971,7 @@
       else if (k === "saveFill") await saveFill();
       else if (k === "saveOil") await saveOil();
       else if (k === "saveCar") await saveCar();
+      else if (k === "pickSave") await pickerSave();
       else if (k === "saveRules") {
         const v = (id) => Number($(id).value);
         await sb.rpc("admin_update_config", { p_pace_hour: v("#r-h"), p_pace_day: v("#r-d"), p_hold_all: $("#r-hold").checked, p_daily: v("#r-u"), p_monthly: v("#r-m") });
@@ -772,6 +998,7 @@
     }
   });
   sb.auth.getSession().then(({ data }) => { if (!data.session) { S.ready = true; render(); } });
+  watchGeoPermission();
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
   render();
 })();

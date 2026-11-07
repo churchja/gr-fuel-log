@@ -5,10 +5,16 @@
     profiles: [{ id: uid, handle: null, status: "approved", is_admin: true, flagged: false, settings: {}, learn_since: null }],
     fills: [], oil_changes: [],
     car_model: [{ user_id: uid, bias: 1.5, bias_sd: 0.4, bias_basis: 20, dte_a: 0.95, dte_b: 20.4, dte_sd: 0.3, dte_n: 8, regional_value: 68, regional_sd: 4, accuracy_recent: 1.1, accuracy_n: 10, accuracy_by_month: [{ month: "2026-09", miss: 2.6, n: 3 }, { month: "2026-10", miss: 1.7, n: 4 }, { month: "2026-11", miss: 1.1, n: 3 }], recent: [] }],
-    my_stations: [{ user_id: uid, station_key: "motomart e lloyd", display_name: "MotoMart E Lloyd", value: 66.2, sd: 1.8, n_mine: 9, n_total: 40, last_value: 64, last_date: "2026-10-30", switch_date: "2026-10-08", switch_from: 78.4, switch_to: 66.6 }],
-    station_estimates: [{ station_key: "motomart e lloyd", display_name: "MotoMart E Lloyd", value: 66.2, sd: 1.8, n_fills: 40, n_owners: 8 }],
+    my_stations: [{ user_id: uid, station_key: "id:st-moto", display_name: "MotoMart · E Lloyd Expy", value: 66.2, sd: 1.8, n_mine: 9, n_total: 40, last_value: 64, last_date: "2026-10-30", switch_date: "2026-10-08", switch_from: 78.4, switch_to: 66.6 }],
+    station_estimates: [{ station_key: "id:st-speedway", display_name: "Speedway · Main St", value: 72, sd: 3, n_fills: 14, n_owners: 4 }, { station_key: "id:st-moto", display_name: "MotoMart · E Lloyd Expy", value: 66.2, sd: 1.8, n_fills: 40, n_owners: 8 }],
   };
   window.__db = db; window.__calls = [];
+  window.__known = [
+    { id: "st-speedway", source: "custom", name: "Speedway · Main St", brand: "Speedway", street: "Main St", city: "Evansville", state: "IN", standardized: true, distance_m: 60, members: 4, mine: 0,
+      fuels: [{ fuel: "E85", last_month: "2026-11", n: 14, price: 2.39, price_month: "2026-11" }, { fuel: "87 octane", last_month: "2026-11", n: 5, price: 2.89, price_month: "2026-11" }], e85: { value: 72, sd: 3, n: 14, last_month: "2026-11" } },
+    { id: "st-moto", source: "osm", name: "MotoMart · E Lloyd Expy", brand: "MotoMart", street: "E Lloyd Expy", city: "Evansville", state: "IN", standardized: true, distance_m: 900, members: 8, mine: 9,
+      fuels: [{ fuel: "E85", last_month: "2026-11", n: 40, price: 2.49, price_month: "2026-11" }, { fuel: "88 octane", last_month: "2026-10", n: 3, price: 2.99, price_month: "2026-10" }], e85: { value: 66.2, sd: 1.8, n: 40, last_month: "2026-10", switch_month: "2026-10", switch_from: 78, switch_to: 67 } },
+  ];
   let listener = null, session = null;
   function q(table) {
     const st = { table, filters: [], op: "select", payload: null, single: false, maybe: false };
@@ -44,6 +50,13 @@
   };
   async function rpcRun(name, args) {
       window.__calls.push({ rpc: name, args });
+      if (name === "stations_known") return { data: window.__known };
+      if (name === "stations_at") return { data: [{ id: "osm-costco", name: "Costco Gasoline · 4500 N Green River Rd", brand: "Costco Gasoline", street: "4500 N Green River Rd", standardized: false, known: false, distance_m: 40 }] };
+      if (name === "standardize_station" || name === "add_station") {
+        const c = { id: args.p_id || "st-new", name: [args.p_brand, args.p_street].filter(Boolean).join(" · "), brand: args.p_brand, street: args.p_street, standardized: true, members: 0, mine: 0, fuels: [], e85: null, distance_m: 0 };
+        window.__calls.push({ station: c.name }); return { data: c };
+      }
+      if (name === "station_detail") return { data: { card: window.__known.find((k) => k.id === args.p_id), prices: [{ fuel: "E85", month: "2026-09", price: 2.39, n: 4 }, { fuel: "E85", month: "2026-10", price: 2.45, n: 6 }, { fuel: "E85", month: "2026-11", price: 2.49, n: 3 }, { fuel: "93 octane", month: "2026-10", price: 3.29, n: 5 }, { fuel: "93 octane", month: "2026-11", price: 3.25, n: 2 }] } };
       if (name === "receipt_quota") return { data: { used_today: 1, daily_limit: 6, month_used: 38, month_cap: 1000 } };
       if (name === "community_stats") return { data: { owners: 12, stations: [{ name: "MotoMart E Lloyd", value: 66, sd: 2, n: 31, owners: 8, switch_date: "2026-10-08", switch_from: 78, switch_to: 66 }], blends: [{ label: "E35 to E44", cpm: 0.136, mpg: 24.3, n: 41 }], grades: [{ grade: "93", cpm: 0.137, n: 30 }, { grade: "87", cpm: 0.129, n: 12 }], on_target: 78 } };
       if (name === "admin_overview") return { data: { config: { pace_per_hour: 5, pace_per_day: 15, hold_all: false, claude_daily_per_user: 6, claude_monthly_cap: 1000, admin_email: "jason.a.church@shadyacres.my", mail_from: "GR Fuel Log <fuel@shadyacres.my>" },
@@ -53,7 +66,7 @@
       return { data: null, error: null };
   }
   Object.assign(client, {
-    functions: { invoke: async (name, { body }) => { window.__calls.push({ fn: name, bytes: body.image.length }); return { data: { ok: true, receipt: { station: "COSTCO WHOLESALE", fuel: "gas", octane: 93, gallons: 5.1, price_per_gallon: 3.299, total: 16.82, date: "2026-11-05" } }, error: null }; } },
+    functions: { invoke: async (name, { body }) => { if (name === "stations") { window.__calls.push({ fn: name }); return { data: { ok: true, synced: 0 }, error: null }; } window.__calls.push({ fn: name, bytes: body.image.length }); return { data: { ok: true, receipt: { station: "COSTCO WHOLESALE", fuel: "gas", octane: 93, gallons: 5.1, price_per_gallon: 3.299, total: 16.82, date: "2026-11-05" } }, error: null }; } },
   });
   window.supabase = { createClient: () => client };
 })();
