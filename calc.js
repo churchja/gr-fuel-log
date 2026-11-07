@@ -8,7 +8,7 @@
   const COMMON_OILS = ["Toyota Genuine 0W-20", "Mobil 1 0W-20", "Pennzoil Ultra Platinum 0W-20", "Motul 8100 Eco-Lite 0W-20", "Amsoil Signature Series 0W-20"];
   const FACTORY_FILTER = "Toyota 90915-YZZN1";
   const DEFAULT_SETTINGS = {
-    target: 40, tuneLimit: 50, gasGrade: 93, ethanolFree: false, primaryE85: "", primaryGas: "",
+    target: 40, tuneLimit: 50, gasGrade: 93, ethanolFree: false, primaryE85: "", primaryGas: "", primaryE85Id: "", primaryGasId: "",
     oilMiles: 3000, oilMonths: 6, receiptMode: "phone_first", share: true, oilTypes: [], filterTypes: [],
   };
 
@@ -16,6 +16,8 @@
   const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
   const r1 = (x) => Math.round(x * 10) / 10;
   const stationKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // Stations picked from the shared list are keyed by their id; older fills typed by hand are keyed by name.
+  const keyFor = (id, name) => (id ? "id:" + id : stationKey(name));
   const withDefaults = (s) => ({ ...DEFAULT_SETTINGS, ...(s || {}) });
   const maxTarget = (settings) => Math.min(70, withDefaults(settings).tuneLimit - 3);
 
@@ -44,10 +46,11 @@
   }
 
   // What E85 strength to assume at the pump, from the learned model.
-  function e85Assumption({ which, settings, myStations = [], stations = [], car = null, today }) {
+  function e85Assumption({ which, settings, other = null, myStations = [], stations = [], car = null, today }) {
     const s = withDefaults(settings);
-    if (which === "primary" && s.primaryE85) {
-      const key = stationKey(s.primaryE85);
+    const pick = which === "primary" ? { id: s.primaryE85Id, name: s.primaryE85 } : other;
+    if (pick && (pick.id || pick.name)) {
+      const key = keyFor(pick.id, pick.name);
       const mine = myStations.find((m) => m.station_key === key);
       if (mine) {
         const others = mine.n_total > mine.n_mine;
@@ -183,6 +186,6 @@
     return { station, date, fuel, octane, ethanol, gallons, price, total, confident: consistent };
   }
 
-  root.Calc = { TANK, BAND, GRADES, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, withDefaults, maxTarget,
+  root.Calc = { TANK, BAND, GRADES, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, keyFor, withDefaults, maxTarget,
     gasEthanol, seasonalDefault, stopTotals, e85Assumption, plan, bandOf, deriveRows, summarize, addMonths, oilStatus, parseReceiptText };
 })(typeof window !== "undefined" ? window : globalThis);

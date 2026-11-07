@@ -15,7 +15,7 @@ const MODEL_VAR = 0.25;        // floor for model error
 const BIAS_PRIOR_VAR = 4;      // sensor bias prior: N(0, 2^2)
 const BIAS_LIMIT = 5;
 
-export type Stop = { station?: string; kind?: string; fuel?: string; ethanol?: number | null; gallons?: number | null };
+export type Stop = { station?: string; station_id?: string; kind?: string; fuel?: string; ethanol?: number | null; gallons?: number | null };
 export type Fill = {
   id: string; user_id: string; date: string; odometer: number; dte: number | null;
   sensor_before: number | null; sensor_after: number | null; full: boolean; stops: Stop[];
@@ -27,6 +27,8 @@ export type Obs = {
 };
 
 export const stationKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// Stations picked from the shared list carry an id, so every owner's fills there land on the same track.
+export const keyFor = (id: string | undefined, name: string) => (id ? "id:" + id : stationKey(name));
 const dayOf = (d: string) => Math.floor(Date.parse(d + "T00:00:00Z") / 86400000);
 const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 const kindOf = (s: Stop) => (s.kind ?? (s.fuel === "E85" ? "e85" : s.fuel === "93" || s.fuel === "gas" ? "gas" : "other")).toLowerCase();
@@ -37,16 +39,16 @@ export function seasonalDefault(day: number): number {
 }
 
 export function tankParts(f: Fill, gasEthanol: number) {
-  let x = 0, p = 0, ge = 0, big = 0, station = "";
+  let x = 0, p = 0, ge = 0, big = 0, station = "", stationId = "";
   for (const s of f.stops ?? []) {
     const g = num(s.gallons) ?? 0;
     if (g <= 0) continue;
     p += g;
     const k = kindOf(s);
-    if (k === "e85") { x += g; if (g > big) { big = g; station = s.station ?? ""; } }
+    if (k === "e85") { x += g; if (g > big) { big = g; station = s.station ?? ""; stationId = s.station_id ?? ""; } }
     else ge += g * (num(s.ethanol) ?? (k === "gas" ? gasEthanol : 10));
   }
-  return { x, p, ge, station };
+  return { x, p, ge, station, stationId };
 }
 
 // One owner's fills, sorted, turned into measurements of station strength.
@@ -57,8 +59,8 @@ export function observations(owner: Owner, fills: Fill[]): Obs[] {
     const next = fs[i + 1];
     const cb = num(f.sensor_before);
     if (!f.full || cb === null) return;
-    const { x, p, ge, station } = tankParts(f, owner.gasEthanol);
-    if (x < 1 || !station.trim()) return;
+    const { x, p, ge, station, stationId } = tankParts(f, owner.gasEthanol);
+    if (x < 1 || (!station.trim() && !stationId)) return;
     if (TANK - p < -0.5) return;
     let m: number | null = null, settled = false;
     const gap = next ? Number(next.odometer) - Number(f.odometer) : Infinity;
@@ -70,7 +72,7 @@ export function observations(owner: Owner, fills: Fill[]): Obs[] {
     if (!(eraw >= 35 && eraw <= 100)) return;
     const sm = settled ? 1.0 : 2.0, sb = 1.0;
     out.push({
-      owner: owner.id, station: stationKey(station), name: station.trim(), day: dayOf(f.date), date: f.date,
+      owner: owner.id, station: keyFor(stationId, station), name: station.trim() || "E85 station", day: dayOf(f.date), date: f.date,
       eraw, k: p / x, v: (t * t * sm * sm + r * r * sb * sb) / (x * x) + MODEL_VAR, cb, r, t, x, ge, m,
     });
   });

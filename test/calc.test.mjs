@@ -39,3 +39,12 @@ const a1 = C.e85Assumption({ which: "primary", settings: { primaryE85: "MotoMart
 t("assumption from my station", a1.source === "learned" && /by you and other owners/.test(a1.why), a1);
 const a2 = C.e85Assumption({ which: "other", settings: {}, today: "2026-11-06" });
 t("assumption default winter", a2.value === 70 && a2.source === "default", a2);
+// Stations from the shared list are matched by id, so a renamed station keeps its learning.
+const ID = "8a1f0c2e-0000-4000-8000-000000000001";
+t("station key by id", C.keyFor(ID, "Anything") === "id:" + ID && C.keyFor("", "MotoMart E Lloyd") === "motomart e lloyd", C.keyFor(ID, "x"));
+const a3 = C.e85Assumption({ which: "primary", settings: { primaryE85: "MotoMart · E Lloyd Expy", primaryE85Id: ID }, myStations: [{ station_key: "id:" + ID, value: 67, sd: 2, n_total: 5, n_mine: 5 }], today: "2026-11-06" });
+t("primary station learned by id", a3.source === "learned" && a3.value === 67, a3);
+const a4 = C.e85Assumption({ which: "other", other: { id: ID, name: "Speedway" }, settings: {}, stations: [{ station_key: "id:" + ID, value: 72, sd: 3, n_fills: 14 }], today: "2026-11-06" });
+t("other station uses community estimate", a4.source === "community" && a4.value === 72, a4);
+const a5 = C.e85Assumption({ which: "other", other: { id: ID, name: "Speedway" }, settings: {}, car: { regional_value: 68, regional_sd: 4 }, today: "2026-11-06" });
+t("other station with no data falls back to regional", a5.source === "regional" && a5.value === 68, a5);
