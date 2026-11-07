@@ -766,7 +766,7 @@
       setTimeout(async () => {
         await loadAll();
         S.ready = true;
-        sb.rpc("register_device", { p_device: deviceId, p_agent: navigator.userAgent.slice(0, 200) });
+        sb.rpc("register_device", { p_device: deviceId, p_agent: navigator.userAgent.slice(0, 200) }).then(() => {}, () => {}); // rpc() only sends once awaited
         route();
       }, 0);
     }

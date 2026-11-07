@@ -39,7 +39,10 @@
       signOut: async () => { session = null; listener("SIGNED_OUT", null); return { error: null }; },
     },
     from: q,
-    rpc: async (name, args) => {
+    // Like the real client, rpc() sends nothing until something awaits it or calls .then().
+    rpc: (name, args) => ({ then: (ok, bad) => rpcRun(name, args).then(ok, bad) }),
+  };
+  async function rpcRun(name, args) {
       window.__calls.push({ rpc: name, args });
       if (name === "receipt_quota") return { data: { used_today: 1, daily_limit: 6, month_used: 38, month_cap: 1000 } };
       if (name === "community_stats") return { data: { owners: 12, stations: [{ name: "MotoMart E Lloyd", value: 66, sd: 2, n: 31, owners: 8, switch_date: "2026-10-08", switch_from: 78, switch_to: 66 }], blends: [{ label: "E35 to E44", cpm: 0.136, mpg: 24.3, n: 41 }], grades: [{ grade: "93", cpm: 0.137, n: 30 }, { grade: "87", cpm: 0.129, n: 12 }], on_target: 78 } };
@@ -48,8 +51,9 @@
         log: [{ email: "m@mailinator.com", decision: "held", reason: "throwaway email address", created_at: "2026-11-06T20:14:00Z" }, { email: "d@gmail.com", decision: "approved", reason: "verified email, normal pace", created_at: "2026-11-04T19:41:00Z" }],
         alerts: [{ kind: "signup_held", message: "Sign-up held: m@mailinator.com (throwaway email address).", created_at: "2026-11-06T20:14:00Z", emailed_at: "2026-11-06T20:14:05Z" }], owners: 12, joined_month: 3, month_reads: 38 } };
       return { data: null, error: null };
-    },
+  }
+  Object.assign(client, {
     functions: { invoke: async (name, { body }) => { window.__calls.push({ fn: name, bytes: body.image.length }); return { data: { ok: true, receipt: { station: "COSTCO WHOLESALE", fuel: "gas", octane: 93, gallons: 5.1, price_per_gallon: 3.299, total: 16.82, date: "2026-11-05" } }, error: null }; } },
-  };
+  });
   window.supabase = { createClient: () => client };
 })();
