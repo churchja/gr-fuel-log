@@ -11,6 +11,7 @@ const W = path.resolve(__dirname, "..");
   await page.route("**/*", (route) => {
     const u = route.request().url();
     if (u.includes("supabase-js")) return route.fulfill({ contentType: "application/javascript", body: fs.readFileSync(W + "/test/mock-supabase.js", "utf8") });
+    if (u.includes("challenges.cloudflare.com")) return route.fulfill({ contentType: "application/javascript", body: "window.turnstile={render:function(el,o){el.textContent='bot check ok';setTimeout(function(){o.callback('test-token');},10);return 'w1';}};" });
     if (u.includes("tesseract")) return route.fulfill({ contentType: "application/javascript", body: fs.readFileSync(W + "/test/mock-tesseract.js", "utf8") });
     if (u.startsWith("http://app.test/")) { const p = W + "/" + (new URL(u).pathname.slice(1) || "index.html"); return fs.existsSync(p) ? route.fulfill({ path: p }) : route.fulfill({ status: 404, body: "" }); }
     return route.abort();

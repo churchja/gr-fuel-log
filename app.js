@@ -127,7 +127,7 @@
     const form = s.step === "email" ? `
       <form class="card" data-form="sendCode" style="color: var(--ink)">
         <label class="field" for="email">Email<input id="email" type="email" autocomplete="email" inputmode="email" required value="${esc(s.email)}"></label>
-        <div id="turnstile"></div>
+        <div id="bot-check"></div>
         ${err}
         <button class="btn primary full" type="submit" ${s.busy ? "disabled" : ""}>${s.busy ? '<span class="spinner"></span>' : ""}Send me a code</button>
       </form>` : `
@@ -142,10 +142,11 @@
       ${form}<p style="color:var(--readout-soft);font-size:14px">No password. New here? Signing in creates your account.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>`;
   }
   function mountTurnstile() {
-    const el = $("#turnstile");
+    const el = $("#bot-check");
     if (!el || !CFG.turnstileSiteKey) return;
-    const draw = () => window.turnstile && window.turnstile.render(el, { sitekey: CFG.turnstileSiteKey, theme: "auto", callback: (t) => { S.signin.captcha = t; }, "expired-callback": () => { S.signin.captcha = ""; } });
-    if (window.turnstile) draw();
+    const ready = () => window.turnstile && typeof window.turnstile.render === "function";
+    const draw = () => ready() && window.turnstile.render(el, { sitekey: CFG.turnstileSiteKey, theme: "auto", callback: (t) => { S.signin.captcha = t; }, "expired-callback": () => { S.signin.captcha = ""; } });
+    if (ready()) draw();
     else if (!document.querySelector("script[data-turnstile]")) {
       const sc = document.createElement("script");
       sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; sc.async = true; sc.dataset.turnstile = "1"; sc.onload = draw;

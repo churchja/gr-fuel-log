@@ -2,5 +2,5 @@
 window.APP_CONFIG = {
   supabaseUrl: "https://szmxucbaomgcfkeqbuoc.supabase.co",
   supabaseKey: "sb_publishable_BfKYJElMUHuBnv7QbjF-ig_3SGX72ps",
-  turnstileSiteKey: "", // Cloudflare Turnstile site key (public). Empty = no bot check on the sign-in page.
+  turnstileSiteKey: "0x4AAAAAAF29WqsJuhT4dNDi", // Cloudflare Turnstile site key (public). Empty = no bot check on the sign-in page.
 };
