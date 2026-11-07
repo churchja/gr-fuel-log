@@ -1203,7 +1203,7 @@
     recheck: async () => { const { data } = await sb.from("profiles").select("*").eq("id", S.user.id).single(); if (data) { S.profile = data; if (approved()) await loadAll(); } render(); },
     resend: () => { S.signin.step = "email"; render(); },
     otherEmail: () => { S.signin = { ...S.signin, step: "email", email: "", code: "", error: "" }; render(); },
-    signOut: async () => { await sb.auth.signOut(); },
+    signOut: async () => { await sb.auth.signOut({ scope: "local" }); },
   };
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-act]"); if (!el) return; e.preventDefault();
