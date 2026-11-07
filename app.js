@@ -720,8 +720,21 @@
   }
   function stationRow(c, act) {
     const sub = [[c.city, c.state].filter(Boolean).join(", "), c.members ? `${c.members} member${c.members === 1 ? "" : "s"}` : "", c.mine ? "you've used it" : ""].filter(Boolean).join(" · ");
-    const e85 = c.e85 ? `<span class="chip target">E${Math.round(c.e85.value)}</span>` : "";
+    const listed = c.listed && c.listed.e85 && !(c.fuels || []).some((f) => f.fuel === "E85") ? `<span class="chip none">E85 listed</span>` : "";
+    const e85 = c.e85 ? `<span class="chip target">E${Math.round(c.e85.value)}</span>` : listed;
     return `<button type="button" class="srow" data-act="${act}" data-id="${esc(c.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(c.name)}</b>${sub ? `<span class="small muted">${esc(sub)}</span>` : ""}${e85 || (c.fuels || []).length ? `<span class="badges">${e85}${fuelChips(c)}</span>` : ""}</span><span class="dist">${distTxt(c.distance_m)}</span></button>`;
+  }
+  function candRow(x) {
+    const where = [[x.city, x.state].filter(Boolean).join(", "), x.known ? "members use it" : x.e85_listed ? "on the U.S. DOE E85 list" : "on the map", x.standardized ? "" : "you'll confirm the name"].filter(Boolean).join(" · ");
+    return `<button type="button" class="srow" data-act="pickerChoose" data-id="${esc(x.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(x.name)}</b><span class="small muted">${esc(where)}</span></span><span class="dist">${distTxt(x.distance_m)}</span></button>`;
+  }
+  async function lookup(p) {
+    const q = String(p.lq || "").trim();
+    if (q.length < 3) { p.lookup = null; return renderPicker(); }
+    p.lookBusy = true; renderPicker();
+    const { data } = await sb.rpc("stations_lookup", { p_q: q, p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
+    if (S.picker !== p || String(p.lq || "").trim() !== q) return;
+    p.lookBusy = false; p.lookup = data || []; renderPicker();
   }
   function matchKnown(text) {
     const words = C.stationKey(text).split(" ").filter((w) => w.length > 2);
@@ -760,7 +773,7 @@
   }
   function pickerChoose(id) {
     const p = S.picker;
-    const c = (p.step === "list" ? S.known : p.cands || []).find((x) => x.id === id) || (S.known || []).find((x) => x.id === id);
+    const c = [...(p.step === "list" ? S.known || [] : []), ...(p.lookup || []), ...(p.cands || []), ...(S.known || [])].find((x) => x.id === id);
     if (!c) return;
     if (!c.standardized) { p.from = p.step; p.step = "confirm"; p.error = ""; p.form = { id: c.id, brand: c.brand || "", street: c.street || "" }; render(); return; }
     applyStation(c.name, c.id);
@@ -770,8 +783,9 @@
     const what = p.kind === "e85" ? "E85 station" : p.kind === "gas" ? "Gas station" : "Station";
     return `<header class="head"><div class="stack"><span class="eyebrow">${p.step === "list" ? "Choose a station" : p.step === "confirm" ? "Confirm the name" : "Add a station"}</span><h1>${what}</h1></div><button type="button" class="btn" data-act="pickerClose">Close</button></header>
       ${p.step === "list" ? `<label class="field" for="pickQ">Search stations<input id="pickQ" type="search" autocomplete="off" value="${esc(p.q)}" placeholder="Brand, street or city"></label>` : ""}
+      ${p.step === "add" ? `<label class="field" for="pickLookup">Search the E85 station list and map<input id="pickLookup" type="search" autocomplete="off" value="${esc(p.lq || "")}" placeholder="Brand, street, city or ZIP"></label>` : ""}
       <div id="pickBody" class="gap">${pickerBody()}</div>
-      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>`;
+      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. E85 station list: U.S. DOE Alternative Fuels Data Center. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>`;
   }
   function renderPicker() { if (!S.picker) return; const el = $("#pickBody"); if (el) el.innerHTML = pickerBody(); else render(); }
   function pickerBody() {
@@ -801,13 +815,17 @@
   }
   function addBody(p) {
     let top;
-    if (p.locState !== "ok") {
+    if (String(p.lq || "").trim().length >= 3) {
+      const l = p.lookup || [];
+      top = p.lookBusy && !p.lookup ? `<p class="small muted"><span class="spinner"></span> Searching…</p>`
+        : l.length ? `<h2>Matches</h2><div class="card list">${l.map(candRow).join("")}</div>` : `<p class="muted">Nothing matches. Add it below.</p>`;
+    } else if (p.locState !== "ok") {
       top = p.locBusy ? `<p class="small muted"><span class="spinner"></span> Finding your location…</p>`
-        : `<p>Are you at the station now? Your location lets the app check the map and catch duplicates.</p><button type="button" class="btn dark full" data-act="pickerHere">I'm at the station · use my location</button>${p.locState === "denied" ? `<p class="small muted">Location is off for this site. You can still add the station without it.</p>` : p.locState === "error" ? `<p class="small muted">Couldn't get your location. You can still add the station without it.</p>` : ""}`;
+        : `<p>Search above, or if you're at the station, use your location to see what's on file right here.</p><button type="button" class="btn dark full" data-act="pickerHere">I'm at the station · use my location</button>${p.locState === "denied" ? `<p class="small muted">Location is off for this site. You can still add the station without it.</p>` : p.locState === "error" ? `<p class="small muted">Couldn't get your location. You can still add the station without it.</p>` : ""}`;
     } else {
       const c = p.cands || [];
       top = `${p.locBusy ? `<p class="small muted"><span class="spinner"></span> Looking nearby…</p>` : ""}
-        ${c.length ? `<h2>Is it one of these?</h2><div class="card list">${c.map((x) => `<button type="button" class="srow" data-act="pickerChoose" data-id="${esc(x.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(x.name)}</b><span class="small muted">${x.known ? "Members use this station" : "On the map"}${x.standardized ? "" : " · you'll confirm the name"}</span></span><span class="dist">${distTxt(x.distance_m)}</span></button>`).join("")}</div>` : p.locBusy ? "" : `<p class="muted">No stations on file within 200 m of you.</p>`}
+        ${c.length ? `<h2>Is it one of these?</h2><div class="card list">${c.map(candRow).join("")}</div>` : p.locBusy ? "" : `<p class="muted">No stations on file within 200 m of you.</p>`}
         ${p.mapBusy ? `<p class="small muted"><span class="spinner"></span> Checking the map around you…</p>` : ""}${p.mapNote ? `<p class="small muted">${esc(p.mapNote)}</p>` : ""}`;
     }
     if (!p.form || p.form.id) p.form = { id: null, brand: p.q || "", street: "" };
@@ -861,7 +879,10 @@
     const fuels = c.fuels.length ? `<table><thead><tr><th>Fuel</th><th class="n">Latest price</th><th class="n">Last seen</th></tr></thead><tbody>${c.fuels.map((f) => `<tr><td>${esc(f.fuel)}</td><td class="n">${f.price ? `$${Number(f.price).toFixed(2)}<br><span class="small muted">${monthTxt(f.price_month)}</span>` : "—"}</td><td class="n">${monthTxt(f.last_month)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted small">No fills logged here yet.</p>`;
     const e = c.e85;
     const e85 = e ? `<section class="dark"><h2>Real E85 strength</h2><span class="big" style="font:700 40px/1 var(--display)">E${Math.round(e.value)} <span style="font-size:22px">±${Math.max(1, Math.round(e.sd))}</span></span><p class="small soft">Measured from ${e.n} fill${e.n === 1 ? "" : "s"}${e.last_month ? `, latest ${monthTxt(e.last_month)}` : ""}.${e.switch_month ? ` Blend switch spotted ${monthTxt(e.switch_month)}, from E${e.switch_from} to E${e.switch_to}.` : ""}</p></section>`
-      : c.fuels.some((f) => f.fuel === "E85") ? `<section class="dark"><h2>Real E85 strength</h2><p class="small soft">Not measured yet. It's worked out from fills with flex sensor readings before and after filling.</p></section>` : "";
+      : c.fuels.some((f) => f.fuel === "E85") || (c.listed && c.listed.e85) ? `<section class="dark"><h2>Real E85 strength</h2><p class="small soft">Not measured yet. It's worked out from fills with flex sensor readings before and after filling.</p></section>` : "";
+    const L = c.listed;
+    const doe = L ? `<section class="card"><h2>U.S. DOE E85 list</h2>${L.e85 ? `<p>${L.status === "T" ? "<b>Listed as temporarily unavailable.</b> " : ""}Listed as selling E85${L.blender ? " from a blender pump" : ""}${(L.blends || []).length ? `, also ${esc(L.blends.join(", "))}` : ""}.</p>${L.hours ? `<p class="small muted">Hours: ${esc(L.hours)}</p>` : ""}${L.confirmed ? `<p class="small muted">Last confirmed by DOE ${monthTxt(L.confirmed)}.</p>` : ""}` : `<p>No longer on the DOE list.</p>`}
+      <p class="small muted">Members' fills count for more than the list. Spot a mistake? Report it on the <a href="https://afdc.energy.gov/stations" target="_blank" rel="noopener">DOE station locator</a>.</p></section>` : "";
     const byFuel = new Map();
     for (const r of d.prices) { if (!byFuel.has(r.fuel)) byFuel.set(r.fuel, []); byFuel.get(r.fuel).push(r); }
     const hist = byFuel.size ? [...byFuel.entries()].map(([fuel, rows]) => `<div class="stack" style="gap:6px"><b>${esc(fuel)}</b>${priceSpark(rows)}<span class="small muted">${rows.slice(-4).map((r) => `${monthTxt(r.month)}: $${Number(r.price).toFixed(2)}`).join(" · ")}</span></div>`).join("")
@@ -871,6 +892,7 @@
         <p class="small muted">${c.members} member${c.members === 1 ? "" : "s"} fill here${c.mine ? ` · you've logged ${c.mine} stop${c.mine === 1 ? "" : "s"} here` : ""}</p></div>
       ${e85}
       <section class="card"><h2>Fuels sold here</h2>${fuels}</section>
+      ${doe}
       <section class="card"><h2>Price history</h2>${hist}</section>
       <p class="small muted">From fills logged by members who share. Other members' prices are shown by month, and who filled where is never shown.</p>`;
   }
@@ -938,6 +960,7 @@
     const el = e.target;
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }
     if (el.id === "pickQ" && S.picker) { S.picker.q = el.value; renderPicker(); return; }
+    if (el.id === "pickLookup" && S.picker) { const p = S.picker; p.lq = el.value; clearTimeout(p.lt); p.lt = setTimeout(() => lookup(p), 300); return; }
     if (el.dataset.pk && S.picker && S.picker.form) { S.picker.form[el.dataset.pk] = el.value; const pv = $("#pickPreview"); if (pv) pv.textContent = previewName(S.picker.form); return; }
     if (el.dataset.f && S.form) { S.form[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; return; }
     if (el.dataset.s && S.form) {

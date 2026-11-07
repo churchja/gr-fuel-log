@@ -14,6 +14,8 @@
       fuels: [{ fuel: "E85", last_month: "2026-11", n: 14, price: 2.39, price_month: "2026-11" }, { fuel: "87 octane", last_month: "2026-11", n: 5, price: 2.89, price_month: "2026-11" }], e85: { value: 72, sd: 3, n: 14, last_month: "2026-11" } },
     { id: "st-moto", source: "osm", name: "MotoMart · E Lloyd Expy", brand: "MotoMart", street: "E Lloyd Expy", city: "Evansville", state: "IN", standardized: true, distance_m: 900, members: 8, mine: 9,
       fuels: [{ fuel: "E85", last_month: "2026-11", n: 40, price: 2.49, price_month: "2026-11" }, { fuel: "88 octane", last_month: "2026-10", n: 3, price: 2.99, price_month: "2026-10" }], e85: { value: 66.2, sd: 1.8, n: 40, last_month: "2026-10", switch_month: "2026-10", switch_from: 78, switch_to: 67 } },
+    { id: "afdc-casey", source: "afdc", name: "Casey's · 2031 N Cross Pointe Blvd", brand: "Casey's", street: "2031 N Cross Pointe Blvd", city: "Evansville", state: "IN", standardized: true, distance_m: 6100, members: 1, mine: 0,
+      fuels: [{ fuel: "87 octane", last_month: "2026-11", n: 1, price: 2.85, price_month: "2026-11" }], e85: null, listed: { e85: true, status: "E", blender: true, blends: ["E15"], hours: "4am-12am daily", confirmed: "2026-04" } },
   ];
   let listener = null, session = null;
   function q(table) {
@@ -51,6 +53,7 @@
   async function rpcRun(name, args) {
       window.__calls.push({ rpc: name, args });
       if (name === "stations_known") return { data: window.__known };
+      if (name === "stations_lookup") return { data: [{ id: "afdc-th83", source: "afdc", name: "Thorntons · 701 S Green River Rd", city: "Evansville", state: "IN", distance_m: 7400, standardized: true, known: false, e85_listed: true }] };
       if (name === "stations_at") return { data: [{ id: "osm-costco", name: "Costco Gasoline · 4500 N Green River Rd", brand: "Costco Gasoline", street: "4500 N Green River Rd", standardized: false, known: false, distance_m: 40 }] };
       if (name === "standardize_station" || name === "add_station") {
         const c = { id: args.p_id || "st-new", name: [args.p_brand, args.p_street].filter(Boolean).join(" · "), brand: args.p_brand, street: args.p_street, standardized: true, members: 0, mine: 0, fuels: [], e85: null, distance_m: 0 };
