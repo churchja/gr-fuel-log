@@ -207,6 +207,8 @@
             <button type="button" data-act="which" data-w="primary" aria-pressed="${S.pump.which === "primary"}">${s.primaryE85 ? esc(s.primaryE85) : "Choose primary station"}</button>
             <button type="button" data-act="which" data-w="other" aria-pressed="${S.pump.which === "other"}">${S.pump.other ? esc(S.pump.other.name) : "Other station"}</button>
           </div>
+          ${S.pumpConfirm ? (() => { const n = S.pumpConfirm === "primary" ? s.primaryE85 : S.pump.other ? S.pump.other.name : ""; return `<div class="confirm" role="alert"><span class="grow">Remove ${esc(n)} ${S.pumpConfirm === "primary" ? "as your primary E85 station" : "from this plan"}? You'll choose a station again.</span><button type="button" class="btn danger" data-act="pumpRemove">Remove</button><button type="button" class="btn" data-act="pumpKeep">Keep</button></div>`; })()
+            : s.primaryE85 || S.pump.other ? `<p class="small muted">Double-tap a station to remove it.</p>` : ""}
           ${S.pump.which === "other" ? `<button type="button" class="link" data-act="pickOther" style="justify-self:start">${S.pump.other ? "Change station" : "Choose the station"}</button>` : ""}
           ${s.primaryE85 && !s.primaryE85Id ? `<p class="small muted">Your primary station isn't matched to the shared station list yet. <a class="link" href="#car">Match it</a> so members' data lines up.</p>` : ""}</div>
         <p class="small muted">Gas: ${esc(s.primaryGas || "your gas station")} · ${s.ethanolFree ? "ethanol-free " : ""}${s.gasGrade} octane (E${C.gasEthanol(s)})</p>
@@ -664,10 +666,11 @@
       </form>`;
   }
   async function saveSettings(settings, handle) {
-    const patch = { settings };
+    // Once past first-time setup, mark it done, so clearing a primary later never sends you back to it.
+    const patch = { settings: needsSetup() ? { ...settings } : { ...settings, setupDone: true } };
     if (handle !== undefined) patch.handle = handle || null;
     const { error } = await sb.from("profiles").update(patch).eq("id", S.user.id);
-    if (!error) { S.settings = C.withDefaults(settings); S.profile = { ...S.profile, ...patch }; }
+    if (!error) { S.settings = C.withDefaults(patch.settings); S.profile = { ...S.profile, ...patch }; }
     return !error;
   }
   async function saveCar() {
@@ -1060,9 +1063,26 @@
   const ACT = {
     target: async (el) => { const s = { ...S.settings }; s.target = Math.max(30, Math.min(C.maxTarget(s), s.target + Number(el.dataset.d))); S.settings = C.withDefaults(s); $("#tgt").textContent = "E" + s.target; renderReadout(); clearTimeout(ACT._t); ACT._t = setTimeout(() => saveSettings(S.settings), 800); },
     which: (el) => {
+      // Two taps on the same station within 400 ms: ask to remove it.
+      const w = el.dataset.w, now = Date.now(), dbl = S.lastTap && S.lastTap.w === w && now - S.lastTap.t < 400;
+      S.lastTap = dbl ? null : { w, t: now };
+      if (dbl && ((w === "primary" && S.settings.primaryE85) || (w === "other" && S.pump.other))) { S.pumpConfirm = w; return render(); }
       if (el.dataset.w === "other" && !S.pump.other) return openPicker({ type: "pumpOther" }, "e85");
       if (el.dataset.w === "primary" && !S.settings.primaryE85) return openPicker({ type: "primaryNow" }, "e85");
       S.pump.which = el.dataset.w; render();
+    },
+    pumpKeep: () => { S.pumpConfirm = null; render(); },
+    pumpRemove: async () => {
+      const w = S.pumpConfirm; S.pumpConfirm = null;
+      if (w === "other" && S.pump.other) {
+        const prev = { other: S.pump.other, which: S.pump.which };
+        S.pump.other = null; S.pump.which = "primary"; render();
+        toast(`${prev.other.name} removed from the plan.`, "Undo", () => { S.pump.other = prev.other; S.pump.which = prev.which; render(); });
+      } else if (w === "primary" && S.settings.primaryE85) {
+        const prev = { primaryE85: S.settings.primaryE85, primaryE85Id: S.settings.primaryE85Id };
+        await saveSettings({ ...S.settings, primaryE85: "", primaryE85Id: "" }); render();
+        toast(`${prev.primaryE85} removed as your primary E85 station.`, "Undo", async () => { await saveSettings({ ...S.settings, ...prev }); render(); });
+      } else render();
     },
     toastAct: () => { const fn = toast.fn; toast.fn = null; const el = $("#toast"); if (el) el.hidden = true; if (fn) fn(); },
     clearPrimary: (el) => {
