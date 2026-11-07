@@ -11,7 +11,7 @@ const W = path.resolve(__dirname, "..");
   await page.route("**/*", (route) => {
     const u = route.request().url();
     if (u.includes("supabase-js")) return route.fulfill({ contentType: "application/javascript", body: fs.readFileSync(W + "/test/mock-supabase.js", "utf8") });
-    if (u.includes("challenges.cloudflare.com")) return route.fulfill({ contentType: "application/javascript", body: "window.turnstile={render:function(el,o){el.textContent='bot check ok';setTimeout(function(){o.callback('test-token');},10);return 'w1';}};" });
+    if (u.includes("challenges.cloudflare.com")) return new Promise((r) => setTimeout(r, 400)).then(() => route.fulfill({ contentType: "application/javascript", body: "window.turnstile={render:function(el,o){el.textContent='bot check ok';setTimeout(function(){o.callback('test-token');},10);return 'w1';}};" }));
     if (u.includes("tesseract")) return route.fulfill({ contentType: "application/javascript", body: fs.readFileSync(W + "/test/mock-tesseract.js", "utf8") });
     if (u.startsWith("http://localhost:4173/")) { const p = W + "/" + (new URL(u).pathname.slice(1) || "index.html"); return fs.existsSync(p) ? route.fulfill({ path: p }) : route.fulfill({ status: 404, body: "" }); }
     return route.abort();
@@ -22,6 +22,8 @@ const W = path.resolve(__dirname, "..");
   await page.waitForSelector("#email");
   log("1 sign-in screen:", await page.locator("h1, .wordmark").first().innerText());
   await shot("signin");
+  await page.waitForFunction(() => document.querySelector("#bot-check") && document.querySelector("#bot-check").textContent.includes("bot check ok"), null, { timeout: 5000 });
+  log("1b bot check box shows on screen");
   await page.fill("#email", "Jason.A.Church@shadyacres.my"); await page.click("text=Send me a code");
   await page.waitForSelector("#code");
   await page.fill("#code", "123456"); await page.click("button:has-text('Sign in')");

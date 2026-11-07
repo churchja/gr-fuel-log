@@ -148,10 +148,15 @@
       ${form}<p style="color:var(--readout-soft);font-size:14px">No password. New here? Signing in creates your account.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>`;
   }
   function mountTurnstile() {
-    const el = $("#bot-check");
-    if (!el || !CFG.turnstileSiteKey) return;
+    if (!$("#bot-check") || !CFG.turnstileSiteKey) return;
     const ready = () => window.turnstile && typeof window.turnstile.render === "function";
-    const draw = () => ready() && window.turnstile.render(el, { sitekey: CFG.turnstileSiteKey, theme: "auto", callback: (t) => { S.signin.captcha = t; }, "expired-callback": () => { S.signin.captcha = ""; } });
+    // Draw into whichever box is on screen when the script is ready; the page may have redrawn while it loaded.
+    const draw = () => {
+      const el = $("#bot-check");
+      if (!el || !ready() || el.dataset.drawn) return;
+      el.dataset.drawn = "1";
+      window.turnstile.render(el, { sitekey: CFG.turnstileSiteKey, theme: "auto", callback: (t) => { S.signin.captcha = t; }, "expired-callback": () => { S.signin.captcha = ""; } });
+    };
     if (ready()) draw();
     else if (!document.querySelector("script[data-turnstile]")) {
       const sc = document.createElement("script");
