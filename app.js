@@ -158,7 +158,7 @@
     if (CFG.turnstileSiteKey && !s.captcha) { s.busy = false; s.error = "Finish the bot check above, then send the code."; render(); return; }
     const { error } = await sb.auth.signInWithOtp({ email: s.email, options: { shouldCreateUser: true, captchaToken: s.captcha || undefined } });
     s.busy = false; s.captcha = "";
-    if (error) { s.error = /rate|seconds/i.test(error.message) ? "Too many codes requested. Wait a minute, then try again." : "Couldn't send the code. Check the address and try again."; }
+    if (error) { s.error = /rate|seconds/i.test(error.message) ? "Too many codes requested. Wait a minute, then try again." : /captcha/i.test(error.message) ? "The bot check didn't go through. Reload the page and try again." : (error.status || 0) >= 500 ? "The app couldn't send email just now. Try again in a few minutes." : "Couldn't send the code. Check the address and try again."; }
     else { s.step = "code"; store.set("last-email", s.email); }
     render();
     if (s.step === "code") setTimeout(() => $("#code") && $("#code").focus(), 50);
