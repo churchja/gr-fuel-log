@@ -144,3 +144,6 @@ div.field { display: grid; gap: 4px; font-size: 13px; font-weight: 500; color: v
 .srow-wrap.is-hidden .srow { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .srow-wrap .srow-act { animation: slidein .15s ease-out; } }
 @keyframes slidein { from { transform: translateX(12px); } to { transform: none; } }
+/* Hints under fields */
+.note-warn { color: var(--warn); font-size: 13px; font-weight: 600; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }

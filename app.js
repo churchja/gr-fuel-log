@@ -278,6 +278,19 @@
       full: fill.full !== false, notes: fill.notes || "", target: fill.target ?? S.settings.target, plan: fill.plan || null, confirmDelete: false, error: "",
       stops: (fill.stops || []).map((st) => ({ ...blankStop(st.kind || "e85"), ...st, gallons: st.gallons ?? "", price: st.price ?? "", total: st.total ?? "", ethanol: st.ethanol ?? (st.kind === "gas" ? null : ""), totalManual: st.total !== null && st.total !== undefined, note: "", noteKind: "", hl: {}, image: null })) };
   }
+  // The most recent fill, so a new fill can show the last odometer reading.
+  function lastFill() {
+    return [...S.fills].filter((x) => num(x.odometer) !== null).sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.odometer) - Number(b.odometer)).pop() || null;
+  }
+  function odoHint() {
+    const f = S.form, last = lastFill();
+    if (!f || f.id || !last) return { text: "", warn: false };
+    const at = `${miles(last.odometer)} mi on ${fmtShort(last.date)}`, odo = num(f.odometer);
+    if (odo === null) return { text: `Last fill: ${at}.`, warn: false };
+    if (odo <= Number(last.odometer)) return { text: `That's not more than your last fill (${at}). Check the reading.`, warn: true };
+    return { text: `${miles(odo - Number(last.odometer))} mi since your last fill (${at}).`, warn: false };
+  }
+  function updateOdoHint() { const el = $("#f-odo-hint"); if (!el) return; const h = odoHint(); el.textContent = h.text; el.className = h.warn ? "small note-warn" : "small muted"; }
   function vLog() {
     const f = S.form;
     return `<header class="head"><h1>${f.id ? "Edit fill" : "Log a fill"}</h1><span class="chip target">Target E${esc(f.target)}</span></header>
@@ -285,8 +298,9 @@
         <section class="card">
           <div class="grid2">
             <label class="field" for="f-date">Date<input id="f-date" type="date" data-f="date" value="${esc(f.date)}" required></label>
-            <label class="field" for="f-odo">Odometer<input id="f-odo" type="number" inputmode="decimal" data-f="odometer" value="${esc(f.odometer)}"></label>
+            <label class="field" for="f-odo">Odometer<input id="f-odo" type="number" inputmode="decimal" data-f="odometer" value="${esc(f.odometer)}"${!f.id && lastFill() ? ` placeholder="Last: ${miles(lastFill().odometer)}"` : ""} aria-describedby="f-odo-hint"></label>
           </div>
+          ${(() => { const h = odoHint(); return h.text ? `<p id="f-odo-hint" class="small ${h.warn ? "note-warn" : "muted"}" aria-live="polite">${esc(h.text)}</p>` : `<p id="f-odo-hint" class="small muted" aria-live="polite"></p>`; })()}
           <h2>Before filling</h2>
           <div class="grid2">
             <label class="field" for="f-dte">Miles to empty<input id="f-dte" type="number" inputmode="decimal" data-f="dte" value="${esc(f.dte)}"></label>
@@ -1169,7 +1183,7 @@
     if (el.dataset.se && S.stEdit) { S.stEdit[el.dataset.se] = el.value; return; }
     if (el.id === "pickLookup" && S.picker) { const p = S.picker; p.lq = el.value; clearTimeout(p.lt); p.lt = setTimeout(() => lookup(p), 300); return; }
     if (el.dataset.pk && S.picker && S.picker.form) { S.picker.form[el.dataset.pk] = el.value; const pv = $("#pickPreview"); if (pv) pv.textContent = previewName(S.picker.form); return; }
-    if (el.dataset.f && S.form) { S.form[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; return; }
+    if (el.dataset.f && S.form) { S.form[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; if (el.dataset.f === "odometer") updateOdoHint(); return; }
     if (el.dataset.s && S.form) {
       const i = Number(el.dataset.i), st = S.form.stops[i], k = el.dataset.s;
       st[k] = el.value; if (st.hl[k]) { delete st.hl[k]; el.classList.remove("hl", "missing"); }

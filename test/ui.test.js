@@ -115,6 +115,15 @@ const W = path.resolve(__dirname, "..");
   log("7b deleted:", await page.evaluate(() => window.__db.fills.length), "fills | bar:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
   await page.click("#toast [data-act=toastAct]"); await page.waitForFunction(() => window.__db.fills.length === 1);
   log("7c undo restored:", await page.evaluate(() => window.__db.fills.length), "fill, same id:", await page.evaluate(() => window.__db.fills[0].id === window.__savedId));
+  // A new fill shows the last odometer reading, greyed out, and how far you've driven since
+  await page.evaluate(() => { location.hash = "log"; }); await page.waitForSelector("text=Log a fill");
+  log("7d new fill odometer:", "placeholder=" + await page.getAttribute("#f-odo", "placeholder"), "| hint:", await page.locator("#f-odo-hint").innerText());
+  await page.fill("#f-odo", "46652");
+  log("7e typed 46652:", await page.locator("#f-odo-hint").innerText());
+  await page.fill("#f-odo", "46000");
+  log("7f typed 46000:", await page.locator("#f-odo-hint").innerText(), "| class:", await page.getAttribute("#f-odo-hint", "class"));
+  await shot("odo-hint");
+  await page.click("[data-act=cancelFill]"); await page.waitForSelector("text=History");
   await shot("history");
   await page.evaluate(() => { location.hash = "community"; }); await page.waitForSelector("text=Stations members use");
   log("8a listed chip:", (await page.locator('.srow:has-text("Casey")').innerText()).replace(/\n+/g, " | "));
