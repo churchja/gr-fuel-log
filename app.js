@@ -841,7 +841,7 @@
     const head = list.length ? `<div class="head"><h2>${p.editing ? "Delete or hide stations" : "Stations"}</h2><button type="button" class="link" data-act="pickerEdit">${p.editing ? "Done" : "Edit"}</button></div>` : "";
     const foot = nHidden ? `<button type="button" class="link" data-act="pickerShowHidden">Show ${nHidden} hidden station${nHidden === 1 ? "" : "s"}</button>`
       : p.showHidden && hidden.length ? `<button type="button" class="link" data-act="pickerShowHidden">Hide them again</button>` : "";
-    const tip = p.editing ? `<p class="small muted">Delete removes a station you added that no other member has used. Hide only takes a station off your list. Tip: you can also swipe a station left.</p>` : "";
+    const tip = p.editing ? `<p class="small muted">Delete removes a station you added that no other member has used. Hide takes a station out of your app but other members still see it. Either way it comes off your pump plan and the fill you're logging, so you'll choose a station again. Tip: you can also swipe a station left.</p>` : "";
     const rows = list.length ? `${head}${tip}<div class="card list">${list.map((c) => pickRow(c, p, hidden)).join("")}</div>${foot}`
       : p.busy ? `<p class="small muted"><span class="spinner"></span> Loading stations…</p>`
       : `<p class="muted">${q ? "No station matches. Add it below." : "No stations yet. Add the one you're using."}</p>${foot}`;
@@ -865,11 +865,31 @@
     await afterStationDeleted(id);
     return data;
   }
+  // Removing a station from your app also takes it off the pump plan (primary or other), the fill you're
+  // logging and your primary settings, so you choose or add a station again. Saved fills keep the name.
+  function detachStation(id) {
+    const before = { other: S.pump.other, which: S.pump.which, stops: [], car: null };
+    if (S.pump.other && S.pump.other.id === id) { S.pump.other = null; if (S.pump.which === "other") S.pump.which = "primary"; }
+    if (S.form) S.form.stops.forEach((st, i) => { if (st.station_id === id) { before.stops.push([S.form, i, st.station, st.station_id]); st.station = ""; st.station_id = ""; } });
+    if (S.carForm) {
+      before.car = [S.carForm, { primaryE85: S.carForm.primaryE85, primaryE85Id: S.carForm.primaryE85Id, primaryGas: S.carForm.primaryGas, primaryGasId: S.carForm.primaryGasId }];
+      for (const k of ["primaryE85", "primaryGas"]) if (S.carForm[k + "Id"] === id) { S.carForm[k] = ""; S.carForm[k + "Id"] = ""; }
+    }
+    const patch = {}, undoPatch = {};
+    for (const k of ["primaryE85", "primaryGas"]) if (S.settings[k + "Id"] === id) { patch[k] = ""; patch[k + "Id"] = ""; undoPatch[k] = S.settings[k]; undoPatch[k + "Id"] = id; }
+    return {
+      patch, undoPatch,
+      restore() {
+        S.pump.other = before.other; S.pump.which = before.which;
+        for (const [form, i, name, sid] of before.stops) if (form.stops[i]) { form.stops[i].station = name; form.stops[i].station_id = sid; }
+        if (before.car && S.carForm === before.car[0]) Object.assign(S.carForm, before.car[1]);
+      },
+    };
+  }
   async function afterStationDeleted(id) {
-    if (S.pump.other && S.pump.other.id === id) { S.pump.other = null; S.pump.which = "primary"; }
-    if (S.form) S.form.stops.forEach((st) => { if (st.station_id === id) st.station_id = ""; });
+    detachStation(id);
     const { data: prof } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
-    if (prof) { S.profile = prof; S.settings = C.withDefaults(prof.settings); if (S.carForm) { if (S.carForm.primaryE85Id === id) S.carForm.primaryE85Id = ""; if (S.carForm.primaryGasId === id) S.carForm.primaryGasId = ""; } }
+    if (prof) { S.profile = prof; S.settings = C.withDefaults(prof.settings); }
     await reloadFills(); refreshLearning(3000);
   }
   const flushDeletes = () => { for (const id of [...pendingDeletes.keys()]) finishDelete(id); };
@@ -1053,19 +1073,29 @@
     pickerShowHidden: () => { const p = S.picker; p.showHidden = !p.showHidden; renderPicker(); },
     pickerHide: async (el) => {
       const id = el.dataset.id, c = (S.known || []).find((k) => k.id === id); if (!c) return;
-      S.picker.swiped = null; await setHidden(id, true); renderPicker();
-      toast(`${c.name} hidden from your list.`, "Undo", async () => { await setHidden(id, false); renderPicker(); });
+      const d = detachStation(id), hidden = new Set(S.settings.hiddenStations || []); hidden.add(id);
+      S.picker.swiped = null;
+      await saveSettings({ ...S.settings, ...d.patch, hiddenStations: [...hidden] }); renderPicker();
+      toast(`${c.name} removed from your app.`, "Undo", async () => {
+        const h = new Set(S.settings.hiddenStations || []); h.delete(id);
+        await saveSettings({ ...S.settings, ...d.undoPatch, hiddenStations: [...h] }); d.restore(); S.picker ? renderPicker() : render();
+      });
     },
     pickerUnhide: async (el) => { await setHidden(el.dataset.id, false); S.picker.swiped = null; renderPicker(); },
     pickerDelete: (el) => {
       const id = el.dataset.id, index = (S.known || []).findIndex((k) => k.id === id); if (index < 0) return;
       const card = S.known[index];
-      S.known = S.known.filter((k) => k.id !== id); S.picker.swiped = null; renderPicker();
+      S.known = S.known.filter((k) => k.id !== id); S.picker.swiped = null;
+      const d = detachStation(id);
+      if (Object.keys(d.patch).length) saveSettings({ ...S.settings, ...d.patch });
+      renderPicker();
       pendingDeletes.set(id, { card, index, timer: setTimeout(() => finishDelete(id), 10000) });
-      toast(`${card.name} deleted.`, "Undo", () => {
+      toast(`${card.name} deleted.`, "Undo", async () => {
         const job = pendingDeletes.get(id); if (!job) return;
         clearTimeout(job.timer); pendingDeletes.delete(id);
-        S.known = [...(S.known || [])]; S.known.splice(Math.min(job.index, S.known.length), 0, job.card); renderPicker();
+        S.known = [...(S.known || [])]; S.known.splice(Math.min(job.index, S.known.length), 0, job.card);
+        if (Object.keys(d.undoPatch).length) await saveSettings({ ...S.settings, ...d.undoPatch });
+        d.restore(); S.picker ? renderPicker() : render();
       });
     },
     askWipe: () => { S.confirmWipe = true; render(); },
