@@ -147,3 +147,4 @@ div.field { display: grid; gap: 4px; font-size: 13px; font-weight: 500; color: v
 /* Hints under fields */
 .note-warn { color: var(--warn); font-size: 13px; font-weight: 600; }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
+.stop-head { cursor: default; user-select: none; -webkit-user-select: none; }

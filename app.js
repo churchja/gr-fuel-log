@@ -311,6 +311,7 @@
         </section>
         <section class="card">
           <div class="head"><h2>Pump stops</h2><span class="small muted">${S.settings.receiptMode === "off" ? "" : "Photos are read, then discarded"}</span></div>
+          <p class="small muted">Double-tap a stop's title, or tap Remove, to delete it.</p>
           <div id="stops" class="gap">${f.stops.map(stopHtml).join("")}</div>
           <button type="button" class="btn" data-act="addStop">Add a pump stop</button>
         </section>
@@ -333,7 +334,9 @@
     const quota = S.quota ? Math.max(0, S.quota.daily_limit - S.quota.used_today) : null;
     const claudeOk = mode !== "phone" && mode !== "off";
     return `<div class="stop" data-i="${i}">
-      <div class="head"><b>Stop ${i + 1}</b>${S.form.stops.length > 1 ? `<button type="button" class="link" data-act="removeStop" data-i="${i}">Remove</button>` : ""}</div>
+      <div class="head stop-head" data-act="stopTap" data-i="${i}"><b>Stop ${i + 1}</b><button type="button" class="link" data-act="askRemoveStop" data-i="${i}">Remove</button></div>
+      ${S.form.confirmStop === i ? (() => { const g = num(st.gallons), t = num(st.total) ?? (g !== null && num(st.price) !== null ? g * num(st.price) : null); const what = [g !== null ? `${g.toFixed(2)} gal` : "", t !== null ? money(t) : ""].filter(Boolean).join(", ");
+        return `<div class="confirm" role="alert"><span class="grow">Delete stop ${i + 1}${what ? ` (${what})` : ""}?</span><button type="button" class="btn danger" data-act="removeStop" data-i="${i}">Delete</button><button type="button" class="btn" data-act="keepStop">Keep</button></div>`; })() : ""}
       <div class="seg" role="group" aria-label="Fuel for stop ${i + 1}">${kinds.map(([k, l]) => `<button type="button" data-act="stopKind" data-i="${i}" data-k="${k}" aria-pressed="${st.kind === k}">${esc(l)}</button>`).join("")}</div>
       ${st.kind === "gas" ? `<div class="grid2"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${C.GRADES.map((g) => `<option value="${g}" ${Number(st.grade) === g ? "selected" : ""}>${g} octane</option>`).join("")}</select></label>
         <label class="field" for="ge${i}">Ethanol %<input id="ge${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" placeholder="${C.gasEthanol(s, st.grade)}"></label></div>` : ""}
@@ -1153,8 +1156,20 @@
     allStations: () => { S.allStations = true; render(); },
     useSuggest: () => { const c = S.pumpSuggest; if (!c) return; S.pump.other = { id: c.id, name: c.name }; S.pump.which = "other"; S.pumpSuggest = null; render(); },
     logPlan: () => { S.form = newForm(true); go("log"); },
-    addStop: () => { S.form.stops.push(blankStop("gas")); renderStops(); },
-    removeStop: (el) => { S.form.stops.splice(Number(el.dataset.i), 1); renderStops(); },
+    addStop: () => { S.form.stops.push(blankStop(S.form.stops.length ? "gas" : "e85")); renderStops(); },
+    // Double-tap a stop's title (or tap Remove) to ask; Delete removes it with Undo.
+    stopTap: (el) => {
+      const i = Number(el.dataset.i), now = Date.now(), dbl = S.lastStopTap && S.lastStopTap.i === i && now - S.lastStopTap.t < 400;
+      S.lastStopTap = dbl ? null : { i, t: now };
+      if (dbl) { S.form.confirmStop = i; renderStops(); }
+    },
+    askRemoveStop: (el) => { S.form.confirmStop = Number(el.dataset.i); renderStops(); },
+    keepStop: () => { S.form.confirmStop = null; renderStops(); },
+    removeStop: (el) => {
+      const form = S.form, i = Number(el.dataset.i), [gone] = form.stops.splice(i, 1);
+      form.confirmStop = null; renderStops();
+      toast(`Stop ${i + 1} deleted.`, "Undo", () => { if (S.form !== form) return; form.stops.splice(Math.min(i, form.stops.length), 0, gone); renderStops(); });
+    },
     stopKind: (el) => { const st = S.form.stops[Number(el.dataset.i)]; st.kind = el.dataset.k; if (st.kind === "e85" && !st.station) { st.station = S.settings.primaryE85; st.station_id = S.settings.primaryE85Id; } if (st.kind === "gas" && !st.station) { st.station = S.settings.primaryGas; st.station_id = S.settings.primaryGasId; } renderStops(); },
     scan: (el) => { const inp = $("#ph" + el.dataset.i); if (inp) inp.click(); },
     claudeRead: (el) => claudeRead(Number(el.dataset.i)),

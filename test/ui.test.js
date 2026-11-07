@@ -165,6 +165,23 @@ const W = path.resolve(__dirname, "..");
   log("11d after undo, pump:", (await page.locator("[data-act=which][data-w=primary]").innerText()).trim());
   await page.evaluate(() => { location.hash = "log"; }); await page.waitForSelector("text=Log a fill");
   log("11e after undo, stop:", (await page.locator("#st0").innerText()).trim());
+  // Delete pump stops on Log a fill: double-tap a stop's title or tap Remove, then confirm; Undo brings it back
+  await page.evaluate(() => { location.hash = "log"; }); await page.waitForSelector("text=Log a fill");
+  log("13 stops:", await page.locator(".stop").count());
+  await page.dblclick(".stop[data-i='1'] .stop-head b"); await page.waitForSelector("[data-act=removeStop]");
+  log("13a double-tap confirm:", (await page.locator(".stop[data-i='1'] .confirm").innerText()).replace(/\n+/g, " "));
+  await shot("stop-confirm");
+  await page.click("[data-act=removeStop]");
+  log("13b after delete:", await page.locator(".stop").count(), "stop | bar:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
+  await page.click("#toast [data-act=toastAct]");
+  log("13c undo:", await page.locator(".stop").count(), "stops");
+  await page.click(".stop[data-i='0'] [data-act=askRemoveStop]"); await page.click("[data-act=keepStop]");
+  log("13d keep:", await page.locator(".stop").count(), "stops");
+  for (const n of [1, 0]) { await page.click(`.stop[data-i='${n}'] [data-act=askRemoveStop]`); await page.click("[data-act=removeStop]"); }
+  log("13e all deleted:", await page.locator(".stop").count(), "stops");
+  await page.click("[data-act=addStop]");
+  log("13f add again:", await page.locator(".stop").count(), "stop, kind:", await page.locator(".stop [aria-pressed=true]").first().innerText());
+  await page.click("[data-act=cancelFill]");
   // Double-tap a station on the pump plan, confirm, and start over
   await page.evaluate(() => { location.hash = "pump"; }); await page.waitForSelector("text=Pump plan");
   log("12 pump hint:", await page.locator("text=Double-tap a station to remove it.").count());
