@@ -832,14 +832,64 @@
     if (p.step === "add") return addBody(p);
     if (p.step === "confirm") return `<p>This station doesn't have a standard name yet. Check the brand and street. Every member will see them.</p>${nameForm(p, "Confirm the name")}`;
     const q = C.stationKey(p.q);
-    const list = (S.known || []).filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
+    const hidden = S.settings.hiddenStations || [];
+    const matches = (S.known || []).filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
+    const list = matches.filter((c) => p.showHidden || !hidden.includes(c.id));
+    const nHidden = matches.length - list.length;
     const loc = p.locState === "ok" ? "" : p.locState === "denied" ? `<p class="small muted">Location is off for this site, so stations are sorted by how many members use them.</p>`
       : `<button type="button" class="btn full" data-act="pickerLocate">Sort by distance from me</button>`;
-    const rows = list.length ? `<div class="card list">${list.map((c) => stationRow(c, "pickerChoose")).join("")}</div>`
+    const head = list.length ? `<div class="head"><h2>${p.editing ? "Delete or hide stations" : "Stations"}</h2><button type="button" class="link" data-act="pickerEdit">${p.editing ? "Done" : "Edit"}</button></div>` : "";
+    const foot = nHidden ? `<button type="button" class="link" data-act="pickerShowHidden">Show ${nHidden} hidden station${nHidden === 1 ? "" : "s"}</button>`
+      : p.showHidden && hidden.length ? `<button type="button" class="link" data-act="pickerShowHidden">Hide them again</button>` : "";
+    const tip = p.editing ? `<p class="small muted">Delete removes a station you added that no other member has used. Hide only takes a station off your list. Tip: you can also swipe a station left.</p>` : "";
+    const rows = list.length ? `${head}${tip}<div class="card list">${list.map((c) => pickRow(c, p, hidden)).join("")}</div>${foot}`
       : p.busy ? `<p class="small muted"><span class="spinner"></span> Loading stations…</p>`
-      : `<p class="muted">${q ? "No station matches. Add it below." : "No stations yet. Add the one you're using."}</p>`;
+      : `<p class="muted">${q ? "No station matches. Add it below." : "No stations yet. Add the one you're using."}</p>${foot}`;
     return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
   }
+  // One station in the picker. In Edit mode, or after a swipe left, it shows Delete (a station you added that
+  // nobody else has used), Hide (any other station) or Unhide.
+  function pickRow(c, p, hidden) {
+    const isHidden = hidden.includes(c.id), open = p.editing || p.swiped === c.id;
+    const act = isHidden ? ["pickerUnhide", "Unhide", ""] : c.can_delete ? ["pickerDelete", "Delete", "danger"] : ["pickerHide", "Hide", ""];
+    const btn = open ? `<button type="button" class="btn ${act[2]} srow-act" data-act="${act[0]}" data-id="${esc(c.id)}" aria-label="${act[1]} ${esc(c.name)}">${act[1]}</button>` : "";
+    return `<div class="srow-wrap${open ? " open" : ""}${isHidden ? " is-hidden" : ""}" data-swipe="${esc(c.id)}">${stationRow(c, "pickerChoose")}${btn}</div>`;
+  }
+  // Deleting waits for the Undo bar to time out, so Undo can bring the station back.
+  const pendingDeletes = new Map();
+  async function finishDelete(id) {
+    const job = pendingDeletes.get(id); if (!job) return;
+    pendingDeletes.delete(id); clearTimeout(job.timer);
+    const { data, error } = await sb.rpc("delete_station", { p_id: id });
+    if (error) { S.known = [...(S.known || [])]; S.known.splice(Math.min(job.index, S.known.length), 0, job.card); renderPicker(); toast(`Couldn't delete ${job.card.name}. Another member may have used it.`); return; }
+    await afterStationDeleted(id);
+    return data;
+  }
+  async function afterStationDeleted(id) {
+    if (S.pump.other && S.pump.other.id === id) { S.pump.other = null; S.pump.which = "primary"; }
+    if (S.form) S.form.stops.forEach((st) => { if (st.station_id === id) st.station_id = ""; });
+    const { data: prof } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
+    if (prof) { S.profile = prof; S.settings = C.withDefaults(prof.settings); if (S.carForm) { if (S.carForm.primaryE85Id === id) S.carForm.primaryE85Id = ""; if (S.carForm.primaryGasId === id) S.carForm.primaryGasId = ""; } }
+    await reloadFills(); refreshLearning(3000);
+  }
+  const flushDeletes = () => { for (const id of [...pendingDeletes.keys()]) finishDelete(id); };
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushDeletes(); });
+  window.addEventListener("pagehide", flushDeletes);
+  async function setHidden(id, hide) {
+    const cur = new Set(S.settings.hiddenStations || []);
+    if (hide) cur.add(id); else cur.delete(id);
+    await saveSettings({ ...S.settings, hiddenStations: [...cur] });
+  }
+  // Swipe a station left to reveal its button; swipe right to close it.
+  let swipe = null;
+  document.addEventListener("touchstart", (e) => { const w = e.target.closest("[data-swipe]"); swipe = w && S.picker ? { id: w.dataset.swipe, x: e.touches[0].clientX, y: e.touches[0].clientY, done: false } : null; }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    if (!swipe || swipe.done || !S.picker) return;
+    const dx = e.touches[0].clientX - swipe.x, dy = e.touches[0].clientY - swipe.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    swipe.done = true; S.swipedAt = Date.now();
+    S.picker.swiped = dx < 0 ? swipe.id : null; renderPicker();
+  }, { passive: true });
   async function findCandidates(p) {
     p.locBusy = true; p.error = ""; renderPicker();
     try { await locate(); p.locState = "ok"; } catch (e) { p.locState = e && e.code === 1 ? "denied" : "error"; p.locBusy = false; return renderPicker(); }
@@ -994,14 +1044,29 @@
       const { data, error } = await sb.rpc("delete_station", { p_id: id });
       if (error) { S.flash = "Couldn't delete the station. Another member may have logged a fill there."; S.stConfirmDelete = false; return render(); }
       S.known = (S.known || []).filter((k) => k.id !== id);
-      if (S.pump.other && S.pump.other.id === id) { S.pump.other = null; S.pump.which = "primary"; }
-      if (S.form) S.form.stops.forEach((st) => { if (st.station_id === id) st.station_id = ""; });
-      const { data: prof } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
-      if (prof) { S.profile = prof; S.settings = C.withDefaults(prof.settings); }
-      await reloadFills(); refreshLearning(3000);
+      await afterStationDeleted(id);
       S.stConfirmDelete = false; S.stationDetail = null;
       S.flash = data && data.fills_unlinked ? `Station deleted. Your ${data.fills_unlinked} fill${data.fills_unlinked === 1 ? "" : "s"} there kept the station name.` : "Station deleted.";
       go("community");
+    },
+    pickerEdit: () => { const p = S.picker; p.editing = !p.editing; p.swiped = null; renderPicker(); },
+    pickerShowHidden: () => { const p = S.picker; p.showHidden = !p.showHidden; renderPicker(); },
+    pickerHide: async (el) => {
+      const id = el.dataset.id, c = (S.known || []).find((k) => k.id === id); if (!c) return;
+      S.picker.swiped = null; await setHidden(id, true); renderPicker();
+      toast(`${c.name} hidden from your list.`, "Undo", async () => { await setHidden(id, false); renderPicker(); });
+    },
+    pickerUnhide: async (el) => { await setHidden(el.dataset.id, false); S.picker.swiped = null; renderPicker(); },
+    pickerDelete: (el) => {
+      const id = el.dataset.id, index = (S.known || []).findIndex((k) => k.id === id); if (index < 0) return;
+      const card = S.known[index];
+      S.known = S.known.filter((k) => k.id !== id); S.picker.swiped = null; renderPicker();
+      pendingDeletes.set(id, { card, index, timer: setTimeout(() => finishDelete(id), 10000) });
+      toast(`${card.name} deleted.`, "Undo", () => {
+        const job = pendingDeletes.get(id); if (!job) return;
+        clearTimeout(job.timer); pendingDeletes.delete(id);
+        S.known = [...(S.known || [])]; S.known.splice(Math.min(job.index, S.known.length), 0, job.card); renderPicker();
+      });
     },
     askWipe: () => { S.confirmWipe = true; render(); },
     keepLogs: () => { S.confirmWipe = false; render(); },
@@ -1061,7 +1126,12 @@
     otherEmail: () => { S.signin = { ...S.signin, step: "email", email: "", code: "", error: "" }; render(); },
     signOut: async () => { await sb.auth.signOut(); },
   };
-  document.addEventListener("click", (e) => { const el = e.target.closest("[data-act]"); if (!el) return; e.preventDefault(); const fn = ACT[el.dataset.act]; if (fn) fn(el, e); });
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-act]"); if (!el) return; e.preventDefault();
+    if (el.dataset.act === "pickerChoose" && S.swipedAt && Date.now() - S.swipedAt < 400) return;
+    if (el.dataset.act === "pickerChoose" && S.picker && S.picker.swiped) { S.picker.swiped = null; return renderPicker(); }
+    const fn = ACT[el.dataset.act]; if (fn) fn(el, e);
+  });
   document.addEventListener("input", (e) => {
     const el = e.target;
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }

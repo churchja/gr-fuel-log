@@ -136,3 +136,11 @@ div.field { display: grid; gap: 4px; font-size: 13px; font-weight: 500; color: v
 .toast { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); max-width: 536px; margin: 0 auto; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 10px; background: var(--readout); color: var(--readout-text); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); font-size: 15px; }
 .toast .link { color: var(--readout-ink); padding: 4px 0; white-space: nowrap; }
 .toast[hidden] { display: none; }
+/* Station list editing: the row's button sits to its right */
+.srow-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; border-top: 1px solid var(--line); }
+.card.list > .srow-wrap:first-of-type { border-top: 0; }
+.srow-wrap > .srow { border-top: 0; }
+.srow-wrap .srow-act { padding: 10px 14px; font-size: 15px; }
+.srow-wrap.is-hidden .srow { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .srow-wrap .srow-act { animation: slidein .15s ease-out; } }
+@keyframes slidein { from { transform: translateX(12px); } to { transform: none; } }

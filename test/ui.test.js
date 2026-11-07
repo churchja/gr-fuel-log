@@ -33,6 +33,26 @@ const W = path.resolve(__dirname, "..");
   await page.click("#c-e85"); await page.waitForSelector(".srow");
   log("2b picker:", (await page.locator("#pickBody").innerText()).replace(/\n+/g, " | ").slice(0, 230));
   await shot("picker");
+  // Swipe a station left to reveal its button
+  await page.evaluate(() => {
+    const el = document.querySelector("[data-swipe]"), r = el.getBoundingClientRect();
+    const t = (x) => new Touch({ identifier: 1, target: el, clientX: x, clientY: r.top + 10 });
+    el.dispatchEvent(new TouchEvent("touchstart", { touches: [t(r.right - 20)], bubbles: true }));
+    el.dispatchEvent(new TouchEvent("touchmove", { touches: [t(r.right - 140)], bubbles: true }));
+    el.dispatchEvent(new TouchEvent("touchend", { touches: [], bubbles: true }));
+  });
+  log("2b3 swipe:", await page.locator(".srow-wrap.open").count(), "row open, button:", await page.locator(".srow-wrap.open .srow-act").innerText());
+  await page.click("[data-act=pickerEdit]");
+  log("2b4 edit mode buttons:", (await page.locator(".srow-act").allInnerTexts()).join(", "));
+  await page.waitForTimeout(300); await shot("picker-edit");
+  await page.click('.srow-wrap:has-text("Casey") [data-act=pickerHide]'); await page.waitForSelector("#toast:not([hidden])");
+  log("2b5 hide:", await page.locator('.srow-wrap:has-text("Casey")').count(), "shown |", (await page.locator("#toast").innerText()).replace(/\n+/g, " "), "| link:", await page.locator("[data-act=pickerShowHidden]").innerText());
+  await page.click("#toast [data-act=toastAct]"); await page.waitForSelector('.srow-wrap:has-text("Casey")');
+  await page.click('.srow-wrap:has-text("Speedway") [data-act=pickerDelete]'); await page.waitForSelector("#toast:not([hidden])");
+  log("2b6 delete:", await page.locator('.srow-wrap:has-text("Speedway")').count(), "shown |", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
+  await page.click("#toast [data-act=toastAct]");
+  log("2b7 undo delete:", await page.locator('.srow-wrap:has-text("Speedway")').count(), "shown | delete sent to server:", await page.evaluate(() => window.__calls.some((c) => c.rpc === "delete_station")));
+  await page.click("[data-act=pickerEdit]");
   await page.click('.srow:has-text("MotoMart")'); await page.waitForSelector("text=Set up your car");
   // Primary gas: not listed yet, so add it from the map match and confirm the standard name
   await page.click("#c-gas"); await page.waitForSelector("text=Add a station that isn't listed");
