@@ -2,7 +2,7 @@
 :root {
   --bg: #eef0ee; --surface: #ffffff; --sunken: #e4e7e4; --ink: #14181b; --muted: #5a636a; --line: #d3d8d4; --dash: #c3c9c5;
   --accent: #f0c000; --accent-ink: #1d1700; --accent-text: #7d6200; --highlight: #fff6cc;
-  --good: #1d7349; --good-bg: #dff0e6; --low: #1e3a8a; --high: #9b1c1c; --warn: #a8501a; --warn-bg: #f6e6db;
+  --good: #1d7349; --good-bg: #dff0e6; --go: #1d7349; --go-ink: #ffffff; --go-edge: #155c39; --low: #1e3a8a; --high: #9b1c1c; --warn: #a8501a; --warn-bg: #f6e6db;
   --danger: #b0122c; --danger-bg: #fadfe4;
   --readout: #12171b; --readout-ink: #f0c000; --readout-text: #e8ece9; --readout-dim: #8d979e; --readout-soft: #b4bcc2;
   --track: #2a333a; --band: #2f8a59; --limit: #ff5a72; --range: #5c4d12;
@@ -14,7 +14,7 @@
   :root {
     --bg: #0f1316; --surface: #171c20; --sunken: #1f262b; --ink: #e8ece9; --muted: #9aa3aa; --line: #2b3339; --dash: #3a444b;
     --accent-text: #f0c000; --highlight: #3a3210;
-    --good: #63cf96; --good-bg: #15301f; --low: #8fb3ff; --high: #ff8a8a; --warn: #f2a66c; --warn-bg: #382315;
+    --good: #63cf96; --good-bg: #15301f; --go: #237a4e; --go-edge: #3fa56f; --low: #8fb3ff; --high: #ff8a8a; --warn: #f2a66c; --warn-bg: #382315;
     --danger: #ff7088; --danger-bg: #3c1520; --readout: #070a0c;
     color-scheme: dark;
   }
@@ -60,13 +60,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .seg button { border: none; border-left: 1px solid var(--line); background: var(--sunken); color: var(--ink); font: 600 15px/1.1 var(--body); padding: 11px 4px; cursor: pointer; }
 .seg button:first-child { border-left: none; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
-.stepper { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
-.stepper button { border: none; background: none; width: 44px; height: 44px; font: 600 20px/1 var(--body); color: var(--ink); cursor: pointer; }
+.stepper { display: flex; align-items: center; background: var(--go); border: 2px solid var(--go-edge); border-radius: 999px; color: var(--go-ink); box-shadow: 0 2px 10px rgba(29, 115, 73, .35); }
+.stepper button { border: none; background: none; width: 44px; height: 44px; font: 700 22px/1 var(--body); color: var(--go-ink); cursor: pointer; border-radius: 999px; }
+.stepper button:hover { background: rgba(255, 255, 255, .14); }
+.stepper button:focus-visible { outline: 2px solid var(--go-ink); outline-offset: -4px; }
 .stepper span { font: 700 20px/1 var(--display); min-width: 48px; text-align: center; }
 .chip { display: inline-flex; align-items: center; font: 600 13px/1 var(--body); padding: 6px 9px; border-radius: 999px; white-space: nowrap; }
 .chip.on { background: var(--good-bg); color: var(--good); } .chip.low { background: var(--low); color: #fff; } .chip.high { background: var(--high); color: #fff; }
 .chip.danger { background: var(--danger); color: #fff; } .chip.none { background: var(--sunken); color: var(--muted); }
-.chip.target { background: var(--good); color: #fff; font-size: 15px; padding: 8px 14px; font-weight: 700; }
+.chip.target { background: var(--go); color: var(--go-ink); font-size: 15px; padding: 8px 14px; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .chip.low, .chip.high, .chip.danger, .chip.target { color: #0f1316; } }
 .chip.soon { background: var(--warn-bg); color: var(--warn); } .chip.due { background: var(--danger); color: #fff; }
 .readout .line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
