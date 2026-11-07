@@ -132,8 +132,8 @@
         <button class="btn primary full" type="submit" ${s.busy ? "disabled" : ""}>${s.busy ? '<span class="spinner"></span>' : ""}Send me a code</button>
       </form>` : `
       <form class="card" data-form="verifyCode" style="color: var(--ink)">
-        <p class="note-ok">Code sent to ${esc(s.email)}. Check your email, then enter the 6 digits here.</p>
-        <label class="field" for="code">6-digit code<input id="code" class="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required value="${esc(s.code)}"></label>
+        <p class="note-ok">Code sent to ${esc(s.email)}. Check your email, then enter the code here.</p>
+        <label class="field" for="code">Code<input id="code" class="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" pattern="[0-9]{6,10}" required value="${esc(s.code)}"></label>
         ${err}
         <button class="btn primary full" type="submit" ${s.busy ? "disabled" : ""}>${s.busy ? '<span class="spinner"></span>' : ""}Sign in</button>
         <div class="row"><button type="button" class="link" data-act="resend">Send a new code</button><span class="grow"></span><button type="button" class="link" data-act="otherEmail">Use another email</button></div>
