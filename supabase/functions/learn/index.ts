@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
   const profiles = await all<{ id: string; status: string; flagged: boolean; settings: Record<string, unknown>; learn_since: string | null }>(
     (a, b) => db.from("profiles").select("id, status, flagged, settings, learn_since").eq("status", "approved").range(a, b));
   const fills = await all<Fill>((a, b) => db.from("fills")
-    .select("id, user_id, date, odometer, dte, sensor_before, sensor_after, full, stops").order("date").order("odometer").range(a, b));
+    .select("id, user_id, date, odometer, dte, sensor_before, sensor_after, full, stops").order("date").order("odometer", { nullsFirst: true }).range(a, b));
 
   const owners = new Map<string, Owner & { flagged: boolean }>();
   for (const p of profiles) {

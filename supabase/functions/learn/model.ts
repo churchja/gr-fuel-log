@@ -17,7 +17,7 @@ const BIAS_LIMIT = 5;
 
 export type Stop = { station?: string; station_id?: string; kind?: string; fuel?: string; ethanol?: number | null; gallons?: number | null };
 export type Fill = {
-  id: string; user_id: string; date: string; odometer: number; dte: number | null;
+  id: string; user_id: string; date: string; odometer: number | null; dte: number | null;
   sensor_before: number | null; sensor_after: number | null; full: boolean; stops: Stop[];
 };
 export type Owner = { id: string; share: boolean; gasEthanol: number; learnSince: string | null };
@@ -63,7 +63,9 @@ export function observations(owner: Owner, fills: Fill[]): Obs[] {
     if (x < 1 || (!station.trim() && !stationId)) return;
     if (TANK - p < -0.5) return;
     let m: number | null = null, settled = false;
-    const gap = next ? Number(next.odometer) - Number(f.odometer) : Infinity;
+    // The next fill's before reading counts only when both odometers are known and close together.
+    const odo = num(f.odometer), nextOdo = next ? num(next.odometer) : null;
+    const gap = next && odo !== null && nextOdo !== null ? nextOdo - odo : Infinity;
     if (next && num(next.sensor_before) !== null && gap > 0 && gap <= 450) { m = num(next.sensor_before); settled = true; }
     else if (num(f.sensor_after) !== null) m = num(f.sensor_after);
     if (m === null) return;

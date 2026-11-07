@@ -96,15 +96,21 @@
     return v < target ? "low" : "high";
   }
 
+  // Oldest first: by date, then odometer, with a missing reading first on its day.
+  const odoKey = (f) => num(f.odometer) ?? -1;
+  const byDateOdo = (a, b) => String(a.date).localeCompare(String(b.date)) || odoKey(a) - odoKey(b);
+
   function deriveRows(fills, settings) {
     const s = withDefaults(settings);
-    const sorted = [...fills].sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.odometer) - Number(b.odometer));
+    const sorted = [...fills].sort(byDateOdo);
     return sorted.map((f, i) => {
       const prev = sorted[i - 1], next = sorted[i + 1];
       const t = stopTotals(f, s);
-      const odo = Number(f.odometer), miles = prev && odo > Number(prev.odometer) ? odo - Number(prev.odometer) : null;
-      const gap = next ? Number(next.odometer) - odo : Infinity;
-      const after = num(f.sensor_after), nextBefore = next && gap > 0 && gap <= 450 ? num(next.sensor_before) : null;
+      // Miles only when both readings are known (imported fills can lack an odometer reading).
+      const odo = num(f.odometer), prevOdo = prev ? num(prev.odometer) : null, nextOdo = next ? num(next.odometer) : null;
+      const miles = odo !== null && prevOdo !== null && odo > prevOdo ? odo - prevOdo : null;
+      const gap = next ? (odo !== null && nextOdo !== null ? nextOdo - odo : null) : Infinity;
+      const after = num(f.sensor_after), nextBefore = next && gap !== null && gap > 0 && gap <= 450 ? num(next.sensor_before) : null;
       const blend = after ?? nextBefore;
       const target = num(f.target) ?? s.target;
       return {

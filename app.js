@@ -276,7 +276,7 @@
     return f;
   }
   function editForm(fill) {
-    return { id: fill.id, date: fill.date, odometer: String(fill.odometer ?? ""), dte: fill.dte ?? "", sensor_before: fill.sensor_before ?? "", sensor_after: fill.sensor_after ?? "",
+    return { id: fill.id, date: fill.date, odometer: String(fill.odometer ?? ""), noOdo: num(fill.odometer) === null, dte: fill.dte ?? "", sensor_before: fill.sensor_before ?? "", sensor_after: fill.sensor_after ?? "",
       full: fill.full !== false, notes: fill.notes || "", target: fill.target ?? S.settings.target, plan: fill.plan || null, confirmDelete: false, error: "",
       stops: (fill.stops || []).map((st) => ({ ...blankStop(st.kind || "e85"), ...st, gallons: st.gallons ?? "", price: st.price ?? "", total: st.total ?? "", ethanol: st.ethanol ?? (st.kind === "gas" ? null : ""), totalManual: st.total !== null && st.total !== undefined, note: "", noteKind: "", hl: {}, image: null })) };
   }
@@ -286,6 +286,7 @@
   }
   function odoHint() {
     const f = S.form, last = lastFill();
+    if (f && f.id && f.noOdo && num(f.odometer) === null) return { text: "No odometer reading on this fill. You can leave it blank.", warn: false };
     if (!f || f.id || !last) return { text: "", warn: false };
     const at = `${miles(last.odometer)} mi on ${fmtShort(last.date)}`, odo = num(f.odometer);
     if (odo === null) return { text: `Last fill: ${at}.`, warn: false };
@@ -377,7 +378,8 @@
     const f = S.form; f.error = "";
     const fail = (m) => { f.error = m; render(); };
     if (!/^\d{4}-\d\d-\d\d$/.test(f.date)) return fail("Enter the fill date.");
-    const odo = num(f.odometer); if (odo === null || odo <= 0) return fail("Enter the odometer reading.");
+    const odo = num(f.odometer);
+    if (odo === null ? !(f.id && f.noOdo) : odo <= 0) return fail("Enter the odometer reading.");
     const stops = cleanStops(f.stops);
     if (!stops.length) return fail("Add the gallons for at least one pump stop.");
     if (stops.some((s) => s.gallons === null || s.gallons < 0)) return fail("Every pump stop needs its gallons.");
@@ -502,7 +504,7 @@
       <p class="small muted">Tap a fill to edit or delete it.</p>
       <section class="card list">${[...rows].reverse().map((r) => `<button type="button" class="item" data-act="editFill" data-id="${esc(r.f.id)}">
           <span class="t">${fmtDate(r.f.date)}</span><span class="r"><span class="chip ${r.band}">${r.blend === null ? "no reading" : `E${C.r1(r.blend)} · ${label[r.band]}`}</span></span>
-          <span class="d num">${miles(r.f.odometer)} mi · ${r.t.e85 ? r.t.e85.toFixed(2) + " E85" : ""}${r.t.gas ? " + " + r.t.gas.toFixed(2) + " gas" : ""}${r.t.other ? " + " + r.t.other.toFixed(2) + " other" : ""}</span>
+          <span class="d num">${num(r.f.odometer) === null ? "Odometer not recorded" : miles(r.f.odometer) + " mi"} · ${r.t.e85 ? r.t.e85.toFixed(2) + " E85" : ""}${r.t.gas ? " + " + r.t.gas.toFixed(2) + " gas" : ""}${r.t.other ? " + " + r.t.other.toFixed(2) + " other" : ""}</span>
           <span class="d r num">${money(r.t.cost)}${r.cpm ? " · $" + r.cpm.toFixed(3) + "/mi" : ""}</span></button>`).join("")}</section>`;
   }
 

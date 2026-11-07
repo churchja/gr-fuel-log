@@ -48,3 +48,12 @@ const a4 = C.e85Assumption({ which: "other", other: { id: ID, name: "Speedway" }
 t("other station uses community estimate", a4.source === "community" && a4.value === 72, a4);
 const a5 = C.e85Assumption({ which: "other", other: { id: ID, name: "Speedway" }, settings: {}, car: { regional_value: 68, regional_sd: 4 }, today: "2026-11-06" });
 t("other station with no data falls back to regional", a5.source === "regional" && a5.value === 68, a5);
+// Imported fills can lack an odometer reading: no miles from or to them, and no borrowed blend across them.
+const rowsN = C.deriveRows([
+  { id: "a", date: "2026-10-21", odometer: null, full: true, sensor_before: null, sensor_after: 49, stops: [{ kind: "e85", gallons: 6.6, price: 2.379 }] },
+  { id: "b", date: "2026-10-21", odometer: 46886, full: false, sensor_after: null, stops: [{ kind: "gas", gallons: 4.5, price: 5.499 }] },
+  { id: "c", date: "2026-10-23", odometer: 47034, full: true, sensor_before: 37, stops: [{ kind: "gas", gallons: 6.9, price: 4.6 }] },
+], {});
+t("null odometer: sorted first on its day", rowsN.map((r) => r.f.id).join("") === "abc", rowsN.map((r) => r.f.id));
+t("null odometer: no miles to or from it", rowsN[0].miles === null && rowsN[1].miles === null && rowsN[2].miles === 148, rowsN.map((r) => r.miles));
+t("null odometer: next before reading not borrowed", rowsN[0].blend === 49 && rowsN[1].blendSrc === "next", rowsN.map((r) => [r.blend, r.blendSrc]));
