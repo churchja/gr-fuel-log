@@ -784,7 +784,7 @@
 
   // The picker: choose a station members use, or add one in the standard Brand · Street form.
   function openPicker(target, kind) {
-    S.picker = { target, kind, q: "", step: "list", busy: false, error: "", locState: S.loc && Date.now() - S.loc.at < 120000 ? "ok" : "idle", cands: null, mapNote: "", form: null, scrollY: window.scrollY };
+    S.picker = { target, kind, q: "", step: "list", busy: false, error: "", locState: S.loc && Date.now() - S.loc.at < 120000 ? "ok" : "idle", cands: null, form: null, scrollY: window.scrollY };
     try { history.pushState({ picker: true }, ""); } catch { /* ignore */ }
     render(); window.scrollTo(0, 0);
     refreshKnown(S.picker, S.geoPerm === "granted" && S.picker.locState !== "ok");
@@ -933,14 +933,10 @@
   async function findCandidates(p) {
     p.locBusy = true; p.error = ""; renderPicker();
     try { await locate(); p.locState = "ok"; } catch (e) { p.locState = e && e.code === 1 ? "denied" : "error"; p.locBusy = false; return renderPicker(); }
-    const near = async () => { const { data } = await sb.rpc("stations_at", { p_lat: S.loc.lat, p_lon: S.loc.lon, p_radius_m: 200 }); return data || []; };
-    p.cands = await near(); p.locBusy = false; p.mapBusy = true; renderPicker();
-    const r = await sb.functions.invoke("stations", { body: { lat: S.loc.lat, lon: S.loc.lon, radius: 1000 } });
+    // Only stations already on file: the DOE E85 list, members' stations and map stations loaded earlier.
+    const { data } = await sb.rpc("stations_at", { p_lat: S.loc.lat, p_lon: S.loc.lon, p_radius_m: 200 });
     if (S.picker !== p) return;
-    p.mapBusy = false;
-    if (r.error || (r.data && r.data.error)) p.mapNote = "The map service didn't answer, so this list may be incomplete. You can still add the station below.";
-    if (r.data && r.data.synced > 0) p.cands = await near();
-    if (S.picker === p) renderPicker();
+    p.cands = data || []; p.locBusy = false; renderPicker();
   }
   function addBody(p) {
     let top;
@@ -955,7 +951,7 @@
       const c = p.cands || [];
       top = `${p.locBusy ? `<p class="small muted"><span class="spinner"></span> Looking nearby…</p>` : ""}
         ${c.length ? `<h2>Is it one of these?</h2><div class="card list">${c.map(candRow).join("")}</div>` : p.locBusy ? "" : `<p class="muted">No stations on file within 200 m of you.</p>`}
-        ${p.mapBusy ? `<p class="small muted"><span class="spinner"></span> Checking the map around you…</p>` : ""}${p.mapNote ? `<p class="small muted">${esc(p.mapNote)}</p>` : ""}`;
+`;
     }
     if (!p.form || p.form.id) p.form = { id: null, brand: p.q || "", street: "" };
     return top + nameForm(p, p.locState === "ok" && (p.cands || []).length ? "Not listed? Add it" : "Add it");
@@ -1149,7 +1145,7 @@
     pickerClose: () => closePicker(),
     pickerLocate: () => refreshKnown(S.picker, true),
     pickerChoose: (el) => pickerChoose(el.dataset.id),
-    pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.mapNote = ""; p.form = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
+    pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.form = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
     pickerHere: () => findCandidates(S.picker),
     pickerBack: () => { const p = S.picker; p.step = p.step === "confirm" && p.from === "add" ? "add" : "list"; p.form = null; p.error = ""; render(); },
     openStation: (el) => openStation(el.dataset.id),
