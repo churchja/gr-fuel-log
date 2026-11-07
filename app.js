@@ -37,7 +37,7 @@
   };
   const isAdmin = () => !!(S.profile && S.profile.is_admin);
   const approved = () => !!(S.profile && S.profile.status === "approved");
-  const needsSetup = () => approved() && !S.settings.primaryE85 && S.fills.length === 0 && !S.setupDone;
+  const needsSetup = () => approved() && !S.settings.setupDone && !S.settings.primaryE85 && S.fills.length === 0 && !S.setupDone;
 
   // ---------- data ----------
   async function loadAll() {
@@ -204,8 +204,8 @@
         </div>
         <div class="stack"><span class="small muted" id="stLabel">E85 station</span>
           <div class="seg" role="group" aria-labelledby="stLabel">
-            <button type="button" data-act="which" data-w="primary" aria-pressed="${S.pump.which === "primary"}">${s.primaryE85 ? "Primary · " + esc(s.primaryE85) : "Primary"}</button>
-            <button type="button" data-act="which" data-w="other" aria-pressed="${S.pump.which === "other"}">${S.pump.other ? "Other · " + esc(S.pump.other.name) : "Other station"}</button>
+            <button type="button" data-act="which" data-w="primary" aria-pressed="${S.pump.which === "primary"}">${s.primaryE85 ? esc(s.primaryE85) : "Choose primary station"}</button>
+            <button type="button" data-act="which" data-w="other" aria-pressed="${S.pump.which === "other"}">${S.pump.other ? esc(S.pump.other.name) : "Other station"}</button>
           </div>
           ${S.pump.which === "other" ? `<button type="button" class="link" data-act="pickOther" style="justify-self:start">${S.pump.other ? "Change station" : "Choose the station"}</button>` : ""}
           ${s.primaryE85 && !s.primaryE85Id ? `<p class="small muted">Your primary station isn't matched to the shared station list yet. <a class="link" href="#car">Match it</a> so members' data lines up.</p>` : ""}</div>
@@ -480,6 +480,7 @@
         ${chart}
         <p class="small muted num">All time: ${all.count} fills, ${money(all.spent)} spent${all.cpm === null ? "" : `, $${all.cpm.toFixed(3)} per mile`}${all.mpg === null ? "" : `, ${all.mpg.toFixed(1)} mpg`}${all.onTarget === null ? "" : `, ${Math.round(all.onTarget * 100)}% on target`}.</p>
       </section>
+      <p class="small muted">Tap a fill to edit or delete it.</p>
       <section class="card list">${[...rows].reverse().map((r) => `<button type="button" class="item" data-act="editFill" data-id="${esc(r.f.id)}">
           <span class="t">${fmtDate(r.f.date)}</span><span class="r"><span class="chip ${r.band}">${r.blend === null ? "no reading" : `E${C.r1(r.blend)} · ${label[r.band]}`}</span></span>
           <span class="d num">${miles(r.f.odometer)} mi · ${r.t.e85 ? r.t.e85.toFixed(2) + " E85" : ""}${r.t.gas ? " + " + r.t.gas.toFixed(2) + " gas" : ""}${r.t.other ? " + " + r.t.other.toFixed(2) + " other" : ""}</span>
@@ -613,7 +614,7 @@
     const f = S.carForm || (S.carForm = { ...S.settings, tuneLimit: S.settings.tuneLimitNotSure ? "50ns" : S.settings.tuneLimit, handle: S.profile.handle || "", error: "" });
     const seg = (key, opts, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([v, l]) => `<button type="button" data-act="set" data-k="${key}" data-v="${v}" aria-pressed="${String(f[key]) === String(v)}">${l}</button>`).join("")}</div>`;
     const mx = C.maxTarget({ tuneLimit: Number(String(f.tuneLimit).replace("ns", "")) });
-    const pickField = (label, key, kind, id) => `<div class="field"><span id="${id}-l">${label}</span><button type="button" id="${id}" class="pickbtn" data-act="pickPrimary" data-p="${kind}" aria-labelledby="${id}-l ${id}"><span class="stack" style="gap:2px;min-width:0">${f[key] ? esc(f[key]) : `<span class="muted">Choose station</span>`}${f[key] && !f[key + "Id"] ? `<span class="small muted">Not matched to the shared list yet. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button></div>`;
+    const pickField = (label, key, kind, id) => `<div class="field"><span id="${id}-l">${label}</span><button type="button" id="${id}" class="pickbtn" data-act="pickPrimary" data-p="${kind}" aria-labelledby="${id}-l ${id}"><span class="stack" style="gap:2px;min-width:0">${f[key] ? esc(f[key]) : `<span class="muted">Choose station</span>`}${f[key] && !f[key + "Id"] ? `<span class="small muted">Not matched to the shared list yet. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button>${f[key] && !first ? `<button type="button" class="link" data-act="clearPrimary" data-k="${key}" style="justify-self:start">Remove</button>` : ""}</div>`;
     return `<div class="stack"><h1>${first ? "Set up your car" : "Your car"}</h1><p class="muted">${first ? "A few answers so the pump plan fits your car. You can change any of it later." : "Change any of it here."}</p></div>
       <form class="gap" data-form="saveCar" novalidate>
         <section class="card"><h2>Blend</h2>
@@ -641,6 +642,9 @@
           <p class="small muted">Shared: month, station, blend, E85 strength, mpg, cost per mile and pump prices. Never shared: dates, odometer, notes, receipts, addresses or your email.</p>
           <label class="field" for="c-handle">Handle (only the admin sees it)<input id="c-handle" type="text" maxlength="40" data-c="handle" value="${esc(f.handle)}"></label>
         </section>
+        ${first ? "" : `<section class="card"><h2>Your data</h2><p class="small muted">To delete one fill, open it from History. To delete one oil change, open it from Oil changes. Or remove everything you've logged:</p>
+          ${S.confirmWipe ? `<div class="confirm"><span class="grow">Delete all ${S.fills.length} fill${S.fills.length === 1 ? "" : "s"} and ${S.oil.length} oil change${S.oil.length === 1 ? "" : "s"} for good? This can't be undone.</span><button type="button" class="btn danger" data-act="wipeLogs">Delete all</button><button type="button" class="btn" data-act="keepLogs">Keep them</button></div>`
+            : `<button type="button" class="btn danger" data-act="askWipe" ${S.fills.length + S.oil.length ? "" : "disabled"}>Delete all my fills and oil changes</button>`}</section>`}
         ${f.error ? `<p class="note-err" role="alert">${esc(f.error)}</p>` : ""}
         <button class="btn primary full" type="submit">${first ? "Save and start" : "Save"}</button>
       </form>`;
@@ -659,7 +663,8 @@
     s.tuneLimitNotSure = String(f.tuneLimit) === "50ns";
     Object.assign(s, { ethanolFree: !!f.ethanolFree, primaryE85: String(f.primaryE85 || "").trim(), primaryGas: String(f.primaryGas || "").trim(), receiptMode: f.receiptMode, share: !!f.share });
     s.primaryE85Id = s.primaryE85 ? String(f.primaryE85Id || "") : ""; s.primaryGasId = s.primaryGas ? String(f.primaryGasId || "") : "";
-    if (!s.primaryE85) { f.error = "Choose the station where you usually buy E85."; return render(); }
+    if (!s.primaryE85 && needsSetup()) { f.error = "Choose the station where you usually buy E85."; return render(); }
+    s.setupDone = true;
     if (!(s.oilMiles >= 500 && s.oilMiles <= 20000) || !(s.oilMonths >= 1 && s.oilMonths <= 24)) { f.error = "Check the oil change interval."; return render(); }
     s.target = Math.min(s.target, C.maxTarget(s));
     if (!(await saveSettings(s, String(f.handle || "").trim()))) { f.error = "Couldn't save. Check your connection and try again."; return render(); }
@@ -696,6 +701,16 @@
         <button class="btn" type="submit">Save rules</button></form>
       <section class="card"><h2>Warnings</h2>${a.alerts.length ? a.alerts.map((x) => `<p class="small"><b>${fmtShort(x.created_at)}</b> · ${esc(x.message)} <span class="muted">${x.emailed_at ? "Emailed." : x.email_error ? "Not emailed: " + esc(x.email_error) : "Sending…"}</span></p>`).join("") : `<p class="small muted">No warnings.</p>`}
         <p class="small muted">Emailed to ${esc(c.admin_email)} from ${esc(c.mail_from)}.</p></section>`;
+  }
+
+  // ---------- undo bar ----------
+  function toast(text, actLabel, fn) {
+    let el = $("#toast");
+    if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    clearTimeout(toast.t); toast.fn = fn || null;
+    el.innerHTML = `<span>${esc(text)}</span>${actLabel ? `<button type="button" class="link" data-act="toastAct">${esc(actLabel)}</button>` : ""}`;
+    el.hidden = false;
+    toast.t = setTimeout(() => { el.hidden = true; toast.fn = null; }, 10000);
   }
 
   // ---------- stations ----------
@@ -768,13 +783,32 @@
     try { if (history.state && history.state.picker) history.back(); } catch { /* ignore */ }
   }
   window.addEventListener("popstate", () => { if (S.picker) { const y = S.picker.scrollY; S.picker = null; render(); window.scrollTo(0, y || 0); } });
-  function applyStation(label, id) {
+  function applyStation(label, id, created) {
     const t = S.picker.target;
-    if (t.type === "stop" && S.form && S.form.stops[t.i]) { const st = S.form.stops[t.i]; st.station = label; st.station_id = id; if (st.hl) delete st.hl.station; }
-    else if (t.type === "pumpOther") { S.pump.other = { id, name: label }; S.pump.which = "other"; }
-    else if (t.type === "primaryE85" && S.carForm) { S.carForm.primaryE85 = label; S.carForm.primaryE85Id = id; }
-    else if (t.type === "primaryGas" && S.carForm) { S.carForm.primaryGas = label; S.carForm.primaryGasId = id; }
+    let restore = null;
+    if (t.type === "stop" && S.form && S.form.stops[t.i]) {
+      const form = S.form, st = form.stops[t.i], prev = { station: st.station, station_id: st.station_id };
+      st.station = label; st.station_id = id; if (st.hl) delete st.hl.station;
+      restore = () => { if (S.form === form && form.stops[t.i]) Object.assign(form.stops[t.i], prev); };
+    } else if (t.type === "pumpOther") {
+      const prev = { other: S.pump.other, which: S.pump.which };
+      S.pump.other = { id, name: label }; S.pump.which = "other";
+      restore = () => { S.pump.other = prev.other; S.pump.which = prev.which; };
+    } else if ((t.type === "primaryE85" || t.type === "primaryGas") && S.carForm) {
+      const cf = S.carForm, k = t.type, prev = { name: cf[k], id: cf[k + "Id"] };
+      cf[k] = label; cf[k + "Id"] = id;
+      restore = () => { if (S.carForm === cf) { cf[k] = prev.name; cf[k + "Id"] = prev.id; } };
+    } else if (t.type === "primaryNow") {
+      const prev = { name: S.settings.primaryE85, id: S.settings.primaryE85Id };
+      saveSettings({ ...S.settings, primaryE85: label, primaryE85Id: id }); S.pump.which = "primary";
+      restore = () => saveSettings({ ...S.settings, primaryE85: prev.name, primaryE85Id: prev.id }).then(render);
+    }
     closePicker();
+    toast(`Station set to ${label}.`, "Undo", async () => {
+      if (restore) await restore();
+      if (created) { const { error } = await sb.rpc("delete_station", { p_id: id }); if (!error) S.known = (S.known || []).filter((k) => k.id !== id); }
+      render();
+    });
   }
   function pickerChoose(id) {
     const p = S.picker;
@@ -857,12 +891,24 @@
       : await sb.rpc("add_station", { p_brand: brand, p_street: street, p_lat: at ? S.loc.lat : null, p_lon: at ? S.loc.lon : null });
     if (S.picker !== p) return;
     if (res.error) { p.error = /too many/.test(res.error.message || "") ? "You've added 10 stations today. Try again tomorrow." : "Couldn't save the station. Check your connection and try again."; return renderPicker(); }
-    const c = res.data; S.known = [c, ...(S.known || []).filter((x) => x.id !== c.id)];
-    applyStation(c.name, c.id);
+    const c = res.data, created = !f.id && c.source === "custom" && !(S.known || []).some((x) => x.id === c.id);
+    S.known = [c, ...(S.known || []).filter((x) => x.id !== c.id)];
+    applyStation(c.name, c.id, created);
   }
 
   // Station page: what members know about one station.
-  function openStation(id) { S.stationId = id; S.stationDetail = null; go("station"); }
+  function openStation(id) { S.stationId = id; S.stationDetail = null; S.stEdit = null; S.stConfirmDelete = false; go("station"); }
+  async function saveStationName() {
+    const se = S.stEdit, brand = String(se.brand || "").trim(), street = String(se.street || "").trim();
+    if (brand.length < 2) { se.error = "Enter the brand or station name."; return render(); }
+    const { data, error } = await sb.rpc("standardize_station", { p_id: S.stationId, p_brand: brand, p_street: street });
+    if (error || !data) { se.error = "Couldn't save the name. Check your connection and try again."; return render(); }
+    S.stEdit = null; S.known = (S.known || []).map((k) => (k.id === data.id ? { ...k, ...data, distance_m: k.distance_m } : k));
+    const { data: prof } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
+    if (prof) { S.profile = prof; S.settings = C.withDefaults(prof.settings); }
+    if (S.pump.other && S.pump.other.id === data.id) S.pump.other.name = data.name;
+    await reloadFills(); S.flash = `Renamed to ${data.name}.`; S.stationDetail = null; await loadStation(); if (S.view !== "station") render();
+  }
   async function loadStation() {
     const id = S.stationId; if (!id) return;
     const { data } = await sb.rpc("station_detail", { p_id: id, p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
@@ -892,6 +938,16 @@
     for (const r of d.prices) { if (!byFuel.has(r.fuel)) byFuel.set(r.fuel, []); byFuel.get(r.fuel).push(r); }
     const hist = byFuel.size ? [...byFuel.entries()].map(([fuel, rows]) => `<div class="stack" style="gap:6px"><b>${esc(fuel)}</b>${priceSpark(rows)}<span class="small muted">${rows.slice(-4).map((r) => `${monthTxt(r.month)}: $${Number(r.price).toFixed(2)}`).join(" · ")}</span></div>`).join("")
       : `<p class="muted small">Prices show up as members log fills here.</p>`;
+    const se = S.stEdit;
+    const manage = c.can_rename || c.can_delete ? `<section class="card"><h2>${c.added_by_you ? "You added this station" : "Fix this station"}</h2>
+      ${se ? `<form class="gap" data-form="stSave" novalidate>
+          <label class="field" for="st-brand">Brand or station name<input id="st-brand" type="text" maxlength="60" data-se="brand" value="${esc(se.brand)}"></label>
+          <label class="field" for="st-street">Street or road<input id="st-street" type="text" maxlength="80" data-se="street" value="${esc(se.street)}"></label>
+          ${se.error ? `<p class="note-err" role="alert">${esc(se.error)}</p>` : ""}
+          <div class="row"><button class="btn primary grow" type="submit">Save name</button><button type="button" class="btn" data-act="stCancel">Cancel</button></div></form>`
+        : S.stConfirmDelete ? `<div class="confirm"><span class="grow">Delete this station for good? Your fills there keep the name.</span><button type="button" class="btn danger" data-act="stDelete">Delete</button><button type="button" class="btn" data-act="stCancel">Keep it</button></div>`
+        : `<div class="row">${c.can_rename ? `<button type="button" class="btn" data-act="stRename">Fix the name</button>` : ""}${c.can_delete ? `<button type="button" class="btn danger" data-act="stAskDelete">Delete this station</button>` : ""}</div>`}
+      <p class="small muted">${c.can_delete ? "You can change or delete it until another member logs a fill there." : "You can fix the name until another member uses this station."}</p></section>` : "";
     return `<a class="link" href="#community">← Community</a>
       <div class="stack"><h1>${esc(c.name)}</h1><p class="muted">${esc(addr || "No address on file")}${c.distance_m !== null && c.distance_m !== undefined ? ` · ${distTxt(c.distance_m)} away` : ""}</p>
         <p class="small muted">${c.members} member${c.members === 1 ? "" : "s"} fill here${c.mine ? ` · you've logged ${c.mine} stop${c.mine === 1 ? "" : "s"} here` : ""}</p></div>
@@ -899,6 +955,7 @@
       <section class="card"><h2>Fuels sold here</h2>${fuels}</section>
       ${doe}
       <section class="card"><h2>Price history</h2>${hist}</section>
+      ${manage}
       <p class="small muted">From fills logged by members who share. Other members' prices are shown by month, and who filled where is never shown.</p>`;
   }
 
@@ -918,7 +975,42 @@
   // ---------- events ----------
   const ACT = {
     target: async (el) => { const s = { ...S.settings }; s.target = Math.max(30, Math.min(C.maxTarget(s), s.target + Number(el.dataset.d))); S.settings = C.withDefaults(s); $("#tgt").textContent = "E" + s.target; renderReadout(); clearTimeout(ACT._t); ACT._t = setTimeout(() => saveSettings(S.settings), 800); },
-    which: (el) => { if (el.dataset.w === "other" && !S.pump.other) return openPicker({ type: "pumpOther" }, "e85"); S.pump.which = el.dataset.w; render(); },
+    which: (el) => {
+      if (el.dataset.w === "other" && !S.pump.other) return openPicker({ type: "pumpOther" }, "e85");
+      if (el.dataset.w === "primary" && !S.settings.primaryE85) return openPicker({ type: "primaryNow" }, "e85");
+      S.pump.which = el.dataset.w; render();
+    },
+    toastAct: () => { const fn = toast.fn; toast.fn = null; const el = $("#toast"); if (el) el.hidden = true; if (fn) fn(); },
+    clearPrimary: (el) => {
+      const cf = S.carForm, k = el.dataset.k, prev = { name: cf[k], id: cf[k + "Id"] };
+      cf[k] = ""; cf[k + "Id"] = ""; render();
+      toast(k === "primaryE85" ? "Primary E85 station removed. Save to keep it that way." : "Primary gas station removed. Save to keep it that way.", "Undo", () => { if (S.carForm === cf) { cf[k] = prev.name; cf[k + "Id"] = prev.id; render(); } });
+    },
+    stRename: () => { const c = S.stationDetail.card; S.stEdit = { brand: c.brand || "", street: c.street || "", error: "" }; S.stConfirmDelete = false; render(); },
+    stCancel: () => { S.stEdit = null; S.stConfirmDelete = false; render(); },
+    stAskDelete: () => { S.stConfirmDelete = true; S.stEdit = null; render(); },
+    stDelete: async () => {
+      const id = S.stationId;
+      const { data, error } = await sb.rpc("delete_station", { p_id: id });
+      if (error) { S.flash = "Couldn't delete the station. Another member may have logged a fill there."; S.stConfirmDelete = false; return render(); }
+      S.known = (S.known || []).filter((k) => k.id !== id);
+      if (S.pump.other && S.pump.other.id === id) { S.pump.other = null; S.pump.which = "primary"; }
+      if (S.form) S.form.stops.forEach((st) => { if (st.station_id === id) st.station_id = ""; });
+      const { data: prof } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
+      if (prof) { S.profile = prof; S.settings = C.withDefaults(prof.settings); }
+      await reloadFills(); refreshLearning(3000);
+      S.stConfirmDelete = false; S.stationDetail = null;
+      S.flash = data && data.fills_unlinked ? `Station deleted. Your ${data.fills_unlinked} fill${data.fills_unlinked === 1 ? "" : "s"} there kept the station name.` : "Station deleted.";
+      go("community");
+    },
+    askWipe: () => { S.confirmWipe = true; render(); },
+    keepLogs: () => { S.confirmWipe = false; render(); },
+    wipeLogs: async () => {
+      const [a, b] = await Promise.all([sb.from("fills").delete().eq("user_id", S.user.id), sb.from("oil_changes").delete().eq("user_id", S.user.id)]);
+      S.confirmWipe = false;
+      if (a.error || b.error) { S.carForm.error = "Couldn't delete everything. Check your connection and try again."; return render(); }
+      await reloadFills(); refreshLearning(3000); S.flash = "All your fills and oil changes were deleted."; render(); window.scrollTo(0, 0);
+    },
     pickOther: () => openPicker({ type: "pumpOther" }, "e85"),
     pickStation: (el) => { const i = Number(el.dataset.i); openPicker({ type: "stop", i }, S.form.stops[i].kind); },
     pickPrimary: (el) => openPicker({ type: el.dataset.p === "gas" ? "primaryGas" : "primaryE85" }, el.dataset.p),
@@ -940,14 +1032,23 @@
     cancelFill: () => { S.form = null; go("history"); },
     askDeleteFill: () => { S.form.confirmDelete = true; render(); },
     keepFill: () => { S.form.confirmDelete = false; render(); },
-    deleteFill: async () => { const { error } = await sb.from("fills").delete().eq("id", S.form.id); if (error) { S.form.error = "Couldn't delete. Try again."; return render(); } S.form = null; S.flash = "Fill deleted."; await reloadFills(); refreshLearning(); go("history"); },
+    deleteFill: async () => {
+      const gone = S.fills.find((x) => x.id === S.form.id);
+      const { error } = await sb.from("fills").delete().eq("id", S.form.id); if (error) { S.form.error = "Couldn't delete. Try again."; return render(); }
+      S.form = null; await reloadFills(); refreshLearning(); go("history");
+      if (gone) toast("Fill deleted.", "Undo", async () => { const { error: e2 } = await sb.from("fills").insert({ ...gone }); if (!e2) { await reloadFills(); refreshLearning(); render(); toast("Fill restored."); } else toast("Couldn't restore the fill."); });
+    },
     editFill: (el) => { const f = S.fills.find((x) => x.id === el.dataset.id); if (f) { S.form = editForm(f); go("log"); } },
     days: (el) => { S.communityDays = Number(el.dataset.d) || 0; S.community = null; render(); loadCommunity(); },
     editOil: (el) => { const o = S.oil.find((x) => x.id === el.dataset.id); if (!o) return; const common = [...C.COMMON_OILS, ...oilChoices().mine]; S.oilForm = { id: o.id, date: o.date, odometer: String(o.odometer), oil: common.includes(o.oil_type) ? o.oil_type : "__custom", customOil: !common.includes(o.oil_type), oilOwn: o.oil_type, filter: o.filter_type || C.FACTORY_FILTER, notes: o.notes || "", error: "", confirmDelete: false }; render(); window.scrollTo(0, 0); },
     cancelOil: () => { S.oilForm = null; render(); },
     askDeleteOil: () => { S.oilForm.confirmDelete = true; render(); },
     keepOil: () => { S.oilForm.confirmDelete = false; render(); },
-    deleteOil: async () => { await sb.from("oil_changes").delete().eq("id", S.oilForm.id); S.oilForm = null; await reloadFills(); render(); },
+    deleteOil: async () => {
+      const gone = S.oil.find((x) => x.id === S.oilForm.id);
+      await sb.from("oil_changes").delete().eq("id", S.oilForm.id); S.oilForm = null; await reloadFills(); render();
+      if (gone) toast("Oil change deleted.", "Undo", async () => { const { error } = await sb.from("oil_changes").insert({ ...gone }); if (!error) { await reloadFills(); render(); toast("Oil change restored."); } else toast("Couldn't restore the oil change."); });
+    },
     askReset: () => { S.confirmReset = true; render(); },
     cancelReset: () => { S.confirmReset = false; render(); },
     resetLearn: async () => { await sb.from("profiles").update({ learn_since: today() }).eq("id", S.user.id); S.profile.learn_since = today(); S.confirmReset = false; S.flash = "Your car's learning starts over from today."; refreshLearning(); render(); },
@@ -965,6 +1066,7 @@
     const el = e.target;
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }
     if (el.id === "pickQ" && S.picker) { S.picker.q = el.value; renderPicker(); return; }
+    if (el.dataset.se && S.stEdit) { S.stEdit[el.dataset.se] = el.value; return; }
     if (el.id === "pickLookup" && S.picker) { const p = S.picker; p.lq = el.value; clearTimeout(p.lt); p.lt = setTimeout(() => lookup(p), 300); return; }
     if (el.dataset.pk && S.picker && S.picker.form) { S.picker.form[el.dataset.pk] = el.value; const pv = $("#pickPreview"); if (pv) pv.textContent = previewName(S.picker.form); return; }
     if (el.dataset.f && S.form) { S.form[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; return; }
@@ -1000,6 +1102,7 @@
       else if (k === "saveOil") await saveOil();
       else if (k === "saveCar") await saveCar();
       else if (k === "pickSave") await pickerSave();
+      else if (k === "stSave") await saveStationName();
       else if (k === "saveRules") {
         const v = (id) => Number($(id).value);
         await sb.rpc("admin_update_config", { p_pace_hour: v("#r-h"), p_pace_day: v("#r-d"), p_hold_all: $("#r-hold").checked, p_daily: v("#r-u"), p_monthly: v("#r-m") });
