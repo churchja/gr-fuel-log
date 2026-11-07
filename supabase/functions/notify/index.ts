@@ -9,6 +9,7 @@ const SUBJECTS: Record<string, string> = {
   budget_80: "Receipt budget at 80%",
   daily_limit_streak: "Owner at the receipt limit 3 days running",
   junk_data: "Implausible fills held out of the community view",
+  claude_spend: "Claude spend limit reached",
 };
 
 Deno.serve(async (req) => {

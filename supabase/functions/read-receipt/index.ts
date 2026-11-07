@@ -83,7 +83,15 @@ Deno.serve(async (req) => {
     const text = msg.content.find((b) => b.type === "text");
     if (text && text.type === "text") result = JSON.parse(text.text);
   } catch (e) {
-    console.error("claude call failed", e instanceof Error ? e.message : e);
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("claude call failed", message);
+    // The Claude Console spend limit (or an empty credit balance) was reached: say so plainly, and warn the admin once a day.
+    if (/usage limit|spend limit|credit balance/i.test(message)) {
+      const since = new Date(Date.now() - 86_400_000).toISOString();
+      const { count } = await db.from("alerts").select("id", { count: "exact", head: true }).eq("kind", "claude_spend").gte("created_at", since);
+      if (!count) await db.from("alerts").insert({ kind: "claude_spend", message: "Claude receipt reading hit the spend limit or ran out of credit in the Claude Console. Owners are on phone reading until it resets or you raise the limit." });
+      return json(req, { error: "month_cap" }, 429);
+    }
     return json(req, { error: "upstream" }, 502);
   }
   if (!result) return json(req, { error: "unreadable" }, 422);
