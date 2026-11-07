@@ -80,6 +80,18 @@ const W = path.resolve(__dirname, "..");
   await page.click("[data-act=which][data-w=primary]");
   await page.click("#logPlan");
   await page.waitForSelector("text=Log a fill");
+  // The plan's gallons show faded in the gallon boxes until the real amount is typed
+  const planHint = () => page.evaluate(() => ({ e85: document.querySelector("#ga0").placeholder, gas: document.querySelector("#ga1").placeholder, e85v: document.querySelector("#ga0").value, readout: document.querySelector("#f-summary") ? document.querySelector("#f-summary").textContent : "" }));
+  const h0 = await planHint();
+  log("4p plan gallons faded:", JSON.stringify(h0));
+  await page.evaluate(() => document.querySelector("#ga0").scrollIntoView({ block: "center" })); await page.screenshot({ path: `${W}/test/shot-plan-gallons.png` });
+  await page.evaluate(() => document.querySelector("#ga1").scrollIntoView({ block: "center" })); await page.screenshot({ path: `${W}/test/shot-plan-gallons-gas.png` });
+  if (!/^\d+\.\d$/.test(h0.e85) || !/^~\d+\.\d$/.test(h0.gas) || h0.e85v !== "") throw new Error("plan gallons not shown as placeholders");
+  await page.fill("#ga0", "5.2");
+  const h1 = await planHint();
+  log("4q after typing:", h1.e85v, "| summary:", h1.readout);
+  if (h1.e85v !== "5.2") throw new Error("typed gallons not kept");
+  await page.fill("#ga0", "");
   await page.fill("#f-odo", "46340");
   // Pick another station for stop 1, then undo it
   await page.click("#st0"); await page.waitForSelector(".srow");

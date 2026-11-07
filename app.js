@@ -270,7 +270,8 @@
     const f = { id: null, date: today(), odometer: "", dte: "", sensor_before: "", sensor_after: "", full: true, notes: "", target: s.target, plan: null, stops: [blankStop("e85"), blankStop("gas")], confirmDelete: false, error: "" };
     if (fromPlan) {
       const { as, p, dte, sensor } = currentPlan();
-      if (p) { f.dte = String(dte); f.sensor_before = String(sensor); f.plan = { e85: p.e85gal, predicted: C.r1(p.predicted), e85Assumed: Math.round(as.value) }; f.stops[0].note = `Plan: ${p.e85gal.toFixed(1)} gal of E85, then fill to full with gas.`; }
+      if (p) { f.dte = String(dte); f.sensor_before = String(sensor); f.plan = { e85: p.e85gal, predicted: C.r1(p.predicted), e85Assumed: Math.round(as.value) }; f.stops[0].note = `Plan: ${p.e85gal.toFixed(1)} gal of E85, then fill to full with gas.`;
+        f.planGal = { e85: p.e85gal.toFixed(1), gas: "~" + p.gas.toFixed(1) }; }
       if (S.pump.which === "other") { f.stops[0].station = S.pump.other ? S.pump.other.name : ""; f.stops[0].station_id = S.pump.other ? S.pump.other.id : ""; }
     }
     return f;
@@ -346,7 +347,7 @@
         <p class="note">For ethanol-free gas, race fuel, a blender pump or any blend that isn't your usual. The math uses the ethanol % you enter.</p>` : ""}
       <div class="field"><span id="stl${i}">Station</span><button type="button" id="st${i}" class="pickbtn ${hl("station")}" data-act="pickStation" data-i="${i}" aria-labelledby="stl${i} st${i}"><span class="stack" style="gap:2px;min-width:0">${st.station ? esc(st.station) : `<span class="muted">Choose station</span>`}${st.station && !st.station_id ? `<span class="small muted">Not matched to the shared list. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button></div>
       <div class="grid3">
-        <label class="field" for="ga${i}">Gallons<input id="ga${i}" type="number" inputmode="decimal" step="0.001" data-s="gallons" data-i="${i}" value="${esc(st.gallons)}" class="${hl("gallons")}"></label>
+        <label class="field" for="ga${i}">Gallons<input id="ga${i}" type="number" inputmode="decimal" step="0.001" data-s="gallons" data-i="${i}" value="${esc(st.gallons)}" class="${hl("gallons")}"${planGalHint(i)}></label>
         <label class="field" for="pr${i}">$ per gal<input id="pr${i}" type="number" inputmode="decimal" step="0.001" data-s="price" data-i="${i}" value="${esc(st.price)}" class="${hl("price")}"></label>
         <label class="field" for="to${i}">Total $<input id="to${i}" type="number" inputmode="decimal" step="0.01" data-s="total" data-i="${i}" value="${esc(st.total)}" class="${hl("total")}" placeholder="auto"></label>
       </div>
@@ -363,6 +364,12 @@
     return `${t.gallons.toFixed(2)} gal so far (${parts}) for ${money(t.cost)}.`;
   }
   function updateSummary() { const el = $("#f-summary"); if (el) el.textContent = formSummary(); }
+  // The pump plan's gallons, shown faded in the first stop of that fuel as a reminder.
+  function planGalHint(i) {
+    const f = S.form, st = f && f.stops[i], g = f && f.planGal && st ? f.planGal[st.kind] : null;
+    if (!g || f.stops.findIndex((x) => x.kind === st.kind) !== i) return "";
+    return ` placeholder="${esc(g)}" aria-description="Pump plan: ${esc(g.replace("~", "about "))} gallons"`;
+  }
   function cleanStops(stops) {
     return stops.map((st) => {
       const g = num(st.gallons), p = num(st.price); let t = num(st.total);
