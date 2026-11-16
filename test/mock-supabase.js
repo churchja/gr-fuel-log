@@ -59,6 +59,10 @@
       if (name === "stations_known") return { data: window.__known };
       if (name === "stations_lookup") return { data: [{ id: "afdc-th83", source: "afdc", name: "Thorntons · 701 S Green River Rd", city: "Evansville", state: "IN", distance_m: 7400, standardized: true, known: false, e85_listed: true, listed_by: "both" },
         { id: "e85p-cm", source: "e85prices", name: "CountryMark · 5015 N Saint Joseph Ave", city: "Evansville", state: "IN", distance_m: 6500, standardized: true, known: false, e85_listed: true, listed_by: "e85prices", e85prices: { listed: true, price: 2.39, price_date: "2026-11-02" } }] };
+      if (name === "stations_near") return { data: [
+        { id: "afdc-th84", source: "afdc", name: "Thorntons · 813 N St Joseph Ave", city: "Evansville", state: "IN", distance_m: 2937, standardized: true, known: false, e85_listed: true, listed_by: "both" },
+        { id: "e85p-em", source: "e85prices", name: "Thorntons · 2401 E Morgan Ave", city: "Evansville", state: "IN", distance_m: 5069, standardized: true, known: false, e85_listed: true, listed_by: "e85prices", e85prices: { listed: true, price: 2.35, price_date: "2026-11-10" } },
+        { id: "afdc-casey", source: "afdc", name: "Casey's · 2031 N Cross Pointe Blvd", city: "Evansville", state: "IN", distance_m: 9528, standardized: true, known: true, e85_listed: true, listed_by: "both" }] };
       if (name === "stations_at") return { data: [{ id: "osm-costco", name: "Costco Gasoline · 4500 N Green River Rd", brand: "Costco Gasoline", street: "4500 N Green River Rd", standardized: false, known: false, distance_m: 40 }] };
       if (name === "standardize_station" || name === "add_station") {
         const c = { id: args.p_id || "st-new", name: [args.p_brand, args.p_street].filter(Boolean).join(" · "), brand: args.p_brand, street: args.p_street, standardized: true, members: 0, mine: 0, fuels: [], e85: null, distance_m: 0 };

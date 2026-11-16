@@ -33,6 +33,19 @@ const W = path.resolve(__dirname, "..");
   await page.click("#c-e85"); await page.waitForSelector(".srow");
   log("2b picker:", (await page.locator("#pickBody").innerText()).replace(/\n+/g, " | ").slice(0, 230));
   await shot("picker");
+  // Current location: the closest E85 stations from every list, nearest first; the search box filters them
+  await page.click("[data-act=pickerNear]"); await page.waitForSelector("text=Closest E85 stations to you");
+  const near = (await page.locator("#pickBody .card.list").innerText()).replace(/\n+/g, " | ");
+  log("2n near:", near);
+  const nearArgs = await page.evaluate(() => window.__calls.filter((c) => c.rpc === "stations_near").pop().args);
+  if (!/^Thorntons · 813 N St Joseph Ave/.test(near) || !/1\.8 mi.*3\.1 mi.*5\.9 mi/.test(near) || !/E85 \$2\.35 on Nov 10/.test(near) || nearArgs.p_e85_only !== true || typeof nearArgs.p_lat !== "number") throw new Error("closest stations wrong");
+  await page.locator("#pickBody").screenshot({ path: `${W}/test/shot-picker-near.png` });
+  await page.fill("#pickQ", "morgan");
+  log("2n2 filtered:", (await page.locator("#pickBody .card.list").innerText()).replace(/\n+/g, " | "));
+  if (await page.locator("#pickBody .card.list .srow").count() !== 1) throw new Error("search did not filter the closest list");
+  await page.fill("#pickQ", "");
+  await page.click("[data-act=pickerNearOff]"); await page.waitForSelector("[data-act=pickerNear]");
+  log("2n3 back to my stations:", await page.locator("#pickBody .srow-wrap").count(), "rows");
   // Swipe a station left to reveal its button
   await page.evaluate(() => {
     const el = document.querySelector("[data-swipe]"), r = el.getBoundingClientRect();

@@ -23,6 +23,7 @@
     more: "M4 6h16M4 12h16M4 18h16",
     camera: "M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
     chevron: "M9 6l6 6-6 6",
+    pin: "M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 1 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5",
   };
   const icon = (name, size = 22) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[name]}"></path></svg>`;
 
@@ -875,7 +876,7 @@
   }
   function pickerChoose(id) {
     const p = S.picker;
-    const c = [...(p.step === "list" ? S.known || [] : []), ...(p.lookup || []), ...(p.cands || []), ...(S.known || [])].find((x) => x.id === id);
+    const c = [...(p.step === "list" && !p.nearOn ? S.known || [] : []), ...(p.step === "list" && p.nearOn ? p.near || [] : []), ...(p.lookup || []), ...(p.cands || []), ...(S.known || [])].find((x) => x.id === id);
     if (!c) return;
     if (!c.standardized) { p.from = p.step; p.step = "confirm"; p.error = ""; p.form = { id: c.id, brand: c.brand || "", street: c.street || "" }; render(); return; }
     applyStation(c.name, c.id);
@@ -899,8 +900,8 @@
     const matches = (S.known || []).filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
     const list = matches.filter((c) => p.showHidden || !hidden.includes(c.id));
     const nHidden = matches.length - list.length;
-    const loc = p.locState === "ok" ? "" : p.locState === "denied" ? `<p class="small muted">Location is off for this site, so stations are sorted by how many members use them.</p>`
-      : `<button type="button" class="btn full" data-act="pickerLocate">Sort by distance from me</button>`;
+    const loc = `<button type="button" class="btn full near-btn" data-act="${p.nearOn ? "pickerNearOff" : "pickerNear"}" aria-pressed="${!!p.nearOn}">${icon("pin", 18)}<span>Use my current location</span></button>`;
+    if (p.nearOn) return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${nearBody(p, q)}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
     const head = list.length ? `<div class="head"><h2>${p.editing ? "Delete or hide stations" : "Stations"}</h2><button type="button" class="link" data-act="pickerEdit">${p.editing ? "Done" : "Edit"}</button></div>` : "";
     const foot = nHidden ? `<button type="button" class="link" data-act="pickerShowHidden">Show ${nHidden} hidden station${nHidden === 1 ? "" : "s"}</button>`
       : p.showHidden && hidden.length ? `<button type="button" class="link" data-act="pickerShowHidden">Hide them again</button>` : "";
@@ -909,6 +910,27 @@
       : p.busy ? `<p class="small muted"><span class="spinner"></span> Loading stations…</p>`
       : `<p class="muted">${q ? "No station matches. Add it below." : "No stations yet. Add the one you're using."}</p>${foot}`;
     return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
+  }
+  // The closest stations to where you are now, nearest first, filtered by whatever is typed in the search box.
+  function nearBody(p, q) {
+    if (p.locState === "denied") return `<p class="small muted">Location is off for this site. Turn it on in your browser's settings for this site, or search by brand, street or city.</p>`;
+    if (p.locState === "error") return `<p class="small muted">Couldn't get your location. Try again, or search by brand, street or city.</p>`;
+    if (p.nearBusy || !p.near) return `<p class="small muted"><span class="spinner"></span> Finding stations near you…</p>`;
+    const list = p.near.filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
+    const what = p.kind === "e85" ? "E85 stations" : "stations";
+    if (!p.near.length) return `<p class="muted">No ${what} on file within 50 miles of you. Add the one you're using below.</p>`;
+    if (!list.length) return `<p class="muted">None of the ${p.near.length} closest ${what} match "${esc(p.q)}".</p>`;
+    return `<div class="head"><h2>Closest ${what} to you</h2><button type="button" class="link" data-act="pickerNearOff">My stations</button></div><div class="card list">${list.map(candRow).join("")}</div>`;
+  }
+  async function findNear(p) {
+    p.nearOn = true; p.nearBusy = true; p.error = ""; renderPicker();
+    try { await locate(); p.locState = "ok"; } catch (e) { p.locState = e && e.code === 1 ? "denied" : "error"; p.nearBusy = false; return renderPicker(); }
+    const { data, error } = await sb.rpc("stations_near", { p_lat: S.loc.lat, p_lon: S.loc.lon, p_e85_only: p.kind === "e85" });
+    if (S.picker !== p) return;
+    p.nearBusy = false; p.near = error ? [] : data || [];
+    if (error) p.error = "Couldn't load stations near you. Check your connection and try again.";
+    renderPicker();
+    loadKnown().then(() => { if (S.picker === p) renderPicker(); });
   }
   // One station in the picker. In Edit mode, or after a swipe left, it shows Delete (a station you added that
   // nobody else has used), Hide (any other station) or Unhide.
@@ -1200,6 +1222,8 @@
     stBrandFix: (el) => { if (S.stEdit) { S.stEdit.brand = el.dataset.b; render(); } },
     pickerClose: () => closePicker(),
     pickerLocate: () => refreshKnown(S.picker, true),
+    pickerNear: () => findNear(S.picker),
+    pickerNearOff: () => { if (S.picker) { S.picker.nearOn = false; S.picker.error = ""; renderPicker(); } },
     pickerChoose: (el) => pickerChoose(el.dataset.id),
     pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.form = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
     pickerHere: () => findCandidates(S.picker),
