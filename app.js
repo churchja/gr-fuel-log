@@ -73,7 +73,7 @@
   async function refreshQuota() { const q = await sb.rpc("receipt_quota"); if (q.data) S.quota = q.data; }
 
   // ---------- routing ----------
-  const VIEWS = ["pump", "log", "history", "community", "more", "oil", "learned", "car", "admin", "station"];
+  const VIEWS = ["pump", "log", "history", "community", "more", "oil", "learned", "car", "about", "admin", "station"];
   function go(view) { if (location.hash !== "#" + view) location.hash = view; else { S.view = view; render(); } }
   function route() {
     let v = location.hash.replace("#", "") || "pump";
@@ -102,7 +102,7 @@
     else if (S.profile.status !== "approved") html = vPending();
     else if (S.picker) html = vPicker();
     else if (needsSetup()) html = vCar(true);
-    else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, oil: vOil, learned: vLearned, car: () => vCar(false), admin: vAdmin, station: vStation }[S.view])();
+    else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, oil: vOil, learned: vLearned, car: () => vCar(false), about: vAbout, admin: vAdmin, station: vStation }[S.view])();
     document.body.classList.toggle("signin", !S.user || (S.profile && S.profile.status !== "approved"));
     app.innerHTML = html;
     $("#tabs").hidden = !(S.user && approved() && !needsSetup() && !S.picker);
@@ -128,6 +128,7 @@
   }
 
   // ---------- sign in ----------
+  const DISCLAIMER = "Not affiliated with Toyota, the U.S. DOE or the Renewable Fuels Association. Blend plans are estimates, and station info can be out of date. Use at your own risk.";
   function vSignin() {
     const s = S.signin;
     const err = s.error ? `<p class="note-err" role="alert">${esc(s.error)}</p>` : "";
@@ -146,7 +147,8 @@
         <div class="row"><button type="button" class="link" data-act="resend">Send a new code</button><span class="grow"></span><button type="button" class="link" data-act="otherEmail">Use another email</button></div>
       </form>`;
     return `<div class="stack"><span class="wordmark">GR FUEL LOG</span><p class="soft" style="font-size:17px;color:var(--readout-soft)">Blend math at the pump, a log that learns your E85, and real numbers from other GR Corolla owners.</p></div>
-      ${form}<p style="color:var(--readout-soft);font-size:14px">No password. New here? Signing in creates your account.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>`;
+      ${form}<p style="color:var(--readout-soft);font-size:14px">No password. New here? Signing in creates your account.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>
+      <p class="fine">${DISCLAIMER}</p>`;
   }
   function mountTurnstile() {
     if (!$("#bot-check") || !CFG.turnstileSiteKey) return;
@@ -569,6 +571,7 @@
       ["oil", "Oil changes", os.last ? `Next due at ${miles(os.dueMiles)} mi or ${fmtShort(os.dueDate)}` : "Log your last oil change to start reminders", os.last && os.level !== "ok" ? `<span class="chip ${os.level}">${os.level === "due" ? "Due now" : "Due soon"}</span>` : ""],
       ["learned", "What the app has learned", "E85 strength, your sensor, fuel left, accuracy", ""],
       ["car", "Your car and settings", "Target, tune limit, gas, receipts, sharing", ""],
+      ["about", "About and disclaimer", "What the app is and where its data comes from", ""],
     ];
     if (isAdmin()) items.push(["admin", "Admin", "Sign-ups, warnings, receipt budget", ""]);
     return `<div class="stack"><h1>More</h1><p class="muted">Signed in as ${esc(S.profile.handle || S.user.email)}</p></div>
@@ -626,6 +629,12 @@
     S.oilForm = null; S.flash = "Oil change saved."; await reloadFills(); render();
   }
 
+  function vAbout() {
+    return `<h1>About and disclaimer</h1>
+      <section class="card"><h2>About</h2><p>GR Fuel Log is a free app for GR Corolla owners running E85: blend math at the pump, a fill log that learns your E85, and numbers from other owners.</p>
+        <p class="small muted">E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p></section>
+      <section class="card"><h2>Disclaimer</h2><p>Not affiliated with Toyota, the U.S. DOE or the Renewable Fuels Association. Blend plans are estimates, so check your flex-fuel sensor after every fill. Station info can be out of date. Use at your own risk.</p></section>`;
+  }
   function vLearned() {
     const car = S.car, s = S.settings;
     const pos = (v) => ((Math.min(85, Math.max(50, v)) - 50) / 35 * 100).toFixed(1) + "%";

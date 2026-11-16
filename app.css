@@ -114,6 +114,9 @@ td { padding: 8px 0; border-top: 1px solid var(--line); } td.n, th.n { text-alig
 .tabs a[aria-current="page"] { color: var(--ink); border-top-color: var(--accent); }
 .signin { min-height: 100vh; background: var(--readout); color: var(--readout-text); }
 .signin #app { padding-top: max(56px, env(safe-area-inset-top, 0px)); }
+/* Sign-in: the disclaimer sits in small print at the bottom of the screen. */
+body.signin #app { min-height: 100vh; min-height: 100svh; grid-template-rows: auto auto auto 1fr; padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
+.fine { align-self: end; margin: 0; font-size: 12px; line-height: 1.45; color: var(--readout-dim); }
 .wordmark { font: 700 44px/1 var(--display); letter-spacing: .04em; color: var(--readout-ink); }
 .code { font: 700 30px/1 var(--display); letter-spacing: .5em; text-align: center; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }

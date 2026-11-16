@@ -21,6 +21,11 @@ const W = path.resolve(__dirname, "..");
   await page.goto("http://localhost:4173/index.html");
   await page.waitForSelector("#email");
   log("1 sign-in screen:", await page.locator("h1, .wordmark").first().innerText());
+  const fine = await page.locator("p.fine").innerText();
+  if (!/Not affiliated with Toyota/.test(fine) || !/Use at your own risk/.test(fine)) throw new Error("disclaimer missing from sign-in");
+  const fineBox = await page.locator("p.fine").boundingBox();
+  log("1a disclaimer at bottom:", Math.round(fineBox.y + fineBox.height), "of 844 |", fine);
+  if (fineBox.y + fineBox.height < 760) throw new Error("disclaimer isn't near the bottom of the screen");
   await shot("signin");
   await page.waitForFunction(() => document.querySelector("#bot-check") && document.querySelector("#bot-check").textContent.includes("bot check ok"), null, { timeout: 5000 });
   log("1b bot check box shows on screen");
@@ -196,12 +201,15 @@ const W = path.resolve(__dirname, "..");
   log("8c renamed:", await page.locator(".banner").first().innerText());
   await page.click("text=Delete this station"); await page.click("[data-act=stDelete]"); await page.waitForSelector("text=Station deleted");
   log("8d deleted:", await page.locator(".banner").first().innerText(), "| still listed:", await page.locator('.srow:has-text("Speedway")').count());
-  for (const v of ["community", "oil", "learned", "car", "admin", "more"]) {
+  for (const v of ["community", "oil", "learned", "car", "about", "admin", "more"]) {
     await page.evaluate((h) => { location.hash = h; }, v);
     await page.waitForTimeout(150);
     log(`8 ${v}:`, (await page.locator("#app").innerText()).replace(/\n+/g, " | ").slice(0, 170));
     await shot(v);
   }
+  if (!/About and disclaimer/.test(await page.locator("#app").innerText())) throw new Error("About and disclaimer missing from More");
+  await page.click("text=About and disclaimer"); await page.waitForSelector("h2:has-text('Disclaimer')");
+  log("8e about:", (await page.locator("#app").innerText()).replace(/\n+/g, " | "));
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");
   log("10 remove primary:", (await page.locator("#c-gas").innerText()).trim(), "| bar:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
