@@ -43,6 +43,11 @@ station from either list shows up for every member:
   station. The parser repairs swapped coordinates and a missing minus sign, and skips listings outside the U.S.
   or with unusable coordinates. Their last E85 price shows only if it was reported in the last 3 months.
   Usernames on the site are never kept.
+- **Pausing E85prices.com.** One switch hides their stations, prices and listings from members:
+  `update public.app_config set e85p_enabled = false where id = 1;` plus `select cron.unschedule('e85prices-weekly');`
+  to stop the download. The stored copy stays, so resuming is instant: set `e85p_enabled = true` and re-run the
+  `cron.schedule('e85prices-weekly', ...)` from the `e85prices_resume` migration. To remove their data entirely,
+  delete the `source = 'e85prices'` stations, clear `e85p_id`/`e85p` on the rest, and empty `e85p_stations`.
 
 ## Running the tests
 
