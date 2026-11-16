@@ -44,7 +44,17 @@ const W = path.resolve(__dirname, "..");
   log("2n2 filtered:", (await page.locator("#pickBody .card.list").innerText()).replace(/\n+/g, " | "));
   if (await page.locator("#pickBody .card.list .srow").count() !== 1) throw new Error("search did not filter the closest list");
   await page.fill("#pickQ", "");
-  await page.click("[data-act=pickerNearOff]"); await page.waitForSelector("[data-act=pickerNear]");
+  // A failed lookup says so and offers Try again; it never claims there are no stations nearby
+  await page.evaluate(() => { window.__nearFail = true; });
+  await page.click(".near-btn"); await page.waitForSelector("[data-act=pickerNear]");
+  await page.click(".near-btn"); await page.waitForSelector("text=Couldn't load stations near you");
+  const failTxt = (await page.locator("#pickBody").innerText()).replace(/\n+/g, " | ");
+  log("2n4 failed lookup:", failTxt.slice(0, 200));
+  if (/within 50 miles/.test(failTxt) || !(await page.locator("#pickBody button:has-text('Try again')").count()) || !(await page.locator("[data-act=pickerNearOff]").count())) throw new Error("failed lookup shown wrong");
+  await page.evaluate(() => { window.__nearFail = false; });
+  await page.click("#pickBody button:has-text('Try again')"); await page.waitForSelector("text=Closest E85 stations to you");
+  log("2n5 after Try again:", await page.locator("#pickBody .card.list .srow").count(), "stations");
+  await page.click("[data-act=pickerNearOff] >> nth=0"); await page.waitForSelector("[data-act=pickerNear]");
   log("2n3 back to my stations:", await page.locator("#pickBody .srow-wrap").count(), "rows");
   // Swipe a station left to reveal its button
   await page.evaluate(() => {

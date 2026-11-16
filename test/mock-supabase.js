@@ -59,6 +59,7 @@
       if (name === "stations_known") return { data: window.__known };
       if (name === "stations_lookup") return { data: [{ id: "afdc-th83", source: "afdc", name: "Thorntons · 701 S Green River Rd", city: "Evansville", state: "IN", distance_m: 7400, standardized: true, known: false, e85_listed: true, listed_by: "both" },
         { id: "e85p-cm", source: "e85prices", name: "CountryMark · 5015 N Saint Joseph Ave", city: "Evansville", state: "IN", distance_m: 6500, standardized: true, known: false, e85_listed: true, listed_by: "e85prices", e85prices: { listed: true, price: 2.39, price_date: "2026-11-02" } }] };
+      if (name === "stations_near" && window.__nearFail) return { data: null, error: { message: "network" } };
       if (name === "stations_near") return { data: [
         { id: "afdc-th84", source: "afdc", name: "Thorntons · 813 N St Joseph Ave", city: "Evansville", state: "IN", distance_m: 2937, standardized: true, known: false, e85_listed: true, listed_by: "both" },
         { id: "e85p-em", source: "e85prices", name: "Thorntons · 2401 E Morgan Ave", city: "Evansville", state: "IN", distance_m: 5069, standardized: true, known: false, e85_listed: true, listed_by: "e85prices", e85prices: { listed: true, price: 2.35, price_date: "2026-11-10" } },

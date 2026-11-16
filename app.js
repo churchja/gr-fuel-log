@@ -789,7 +789,7 @@
   }
   async function loadKnown() {
     const { data, error } = await sb.rpc("stations_known", { p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
-    if (!error) S.known = data || [];
+    if (!error) S.known = (data || []).filter((c) => !pendingDeletes.has(c.id));
     return !error;
   }
   // E85prices.com (Renewable Fuels Association): whether it lists a station, and an E85 price from the last 3 months.
@@ -912,23 +912,33 @@
     return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
   }
   // The closest stations to where you are now, nearest first, filtered by whatever is typed in the search box.
+  // Stations waiting out their Undo window after a delete stay out of it.
   function nearBody(p, q) {
-    if (p.locState === "denied") return `<p class="small muted">Location is off for this site. Turn it on in your browser's settings for this site, or search by brand, street or city.</p>`;
-    if (p.locState === "error") return `<p class="small muted">Couldn't get your location. Try again, or search by brand, street or city.</p>`;
-    if (p.nearBusy || !p.near) return `<p class="small muted"><span class="spinner"></span> Finding stations near you…</p>`;
-    const list = p.near.filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
     const what = p.kind === "e85" ? "E85 stations" : "stations";
-    if (!p.near.length) return `<p class="muted">No ${what} on file within 50 miles of you. Add the one you're using below.</p>`;
-    if (!list.length) return `<p class="muted">None of the ${p.near.length} closest ${what} match "${esc(p.q)}".</p>`;
-    return `<div class="head"><h2>Closest ${what} to you</h2><button type="button" class="link" data-act="pickerNearOff">My stations</button></div><div class="card list">${list.map(candRow).join("")}</div>`;
+    const head = `<div class="head"><h2>Closest ${what} to you</h2><button type="button" class="link" data-act="pickerNearOff">My stations</button></div>`;
+    if (p.nearBusy || (!p.near && !p.nearErr)) return `${head}<p class="small muted"><span class="spinner"></span> Finding stations near you…</p>`;
+    if (p.nearErr) return `${head}<p class="note-err" role="alert">${esc(p.nearErr)}</p><button type="button" class="btn full" data-act="pickerNear">Try again</button>`;
+    const near = p.near.filter((c) => !pendingDeletes.has(c.id));
+    const list = near.filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
+    if (!near.length) return `${head}<p class="muted">No ${what} on file within 50 miles of you. Add the one you're using below.</p>`;
+    if (!list.length) return `${head}<p class="muted">None of the ${near.length} closest ${what} match "${esc(p.q)}". Check My stations, or add it below.</p>`;
+    return `${head}<div class="card list">${list.map(candRow).join("")}</div>`;
   }
+  // A location problem goes back to My stations with the message on top, so search works and one tap tries again.
   async function findNear(p) {
-    p.nearOn = true; p.nearBusy = true; p.error = ""; renderPicker();
-    try { await locate(); p.locState = "ok"; } catch (e) { p.locState = e && e.code === 1 ? "denied" : "error"; p.nearBusy = false; return renderPicker(); }
+    p.nearOn = true; p.nearBusy = true; p.nearErr = ""; p.near = null; p.swiped = null; p.error = ""; renderPicker();
+    try { await locate(); p.locState = "ok"; } catch (e) {
+      if (S.picker !== p) return;
+      p.locState = e && e.code === 1 ? "denied" : "error"; p.nearBusy = false; p.nearOn = false;
+      p.error = p.locState === "denied" ? "Location is off for this site. Turn it on in your browser's settings for this site, or search by brand, street or city."
+        : "Couldn't get your location. Tap Use my current location to try again, or search by brand, street or city.";
+      return renderPicker();
+    }
+    if (S.picker !== p) return;
     const { data, error } = await sb.rpc("stations_near", { p_lat: S.loc.lat, p_lon: S.loc.lon, p_e85_only: p.kind === "e85" });
     if (S.picker !== p) return;
-    p.nearBusy = false; p.near = error ? [] : data || [];
-    if (error) p.error = "Couldn't load stations near you. Check your connection and try again.";
+    p.nearBusy = false;
+    if (error) p.nearErr = "Couldn't load stations near you. Check your connection and try again."; else p.near = data || [];
     renderPicker();
     loadKnown().then(() => { if (S.picker === p) renderPicker(); });
   }
@@ -1223,9 +1233,9 @@
     pickerClose: () => closePicker(),
     pickerLocate: () => refreshKnown(S.picker, true),
     pickerNear: () => findNear(S.picker),
-    pickerNearOff: () => { if (S.picker) { S.picker.nearOn = false; S.picker.error = ""; renderPicker(); } },
+    pickerNearOff: () => { if (S.picker) { S.picker.nearOn = false; S.picker.nearErr = ""; S.picker.error = ""; renderPicker(); } },
     pickerChoose: (el) => pickerChoose(el.dataset.id),
-    pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.form = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
+    pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.form = null; p.swiped = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
     pickerHere: () => findCandidates(S.picker),
     pickerBack: () => { const p = S.picker; p.step = p.step === "confirm" && p.from === "add" ? "add" : "list"; p.form = null; p.error = ""; render(); },
     openStation: (el) => openStation(el.dataset.id),

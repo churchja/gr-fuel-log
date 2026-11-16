@@ -1,4 +1,4 @@
-import { brandOf, decode, extractMarkers, inWindow, priceDate, rowOf } from "../supabase/functions/e85prices/parse.ts";
+import { brandOf, decode, extractMarkers, fixCoords, inWindow, priceDate, rowOf } from "../supabase/functions/e85prices/parse.ts";
 const t = (name: string, ok: boolean, got: unknown) => { console.log(`${ok ? "PASS" : "FAIL"} ${name}${ok ? "" : " -> " + JSON.stringify(got)}`); if (!ok) process.exitCode = 1; };
 
 // The map page keeps every station in one script variable. Strings can hold brackets and escaped quotes.
@@ -31,3 +31,12 @@ t("window: Sun 10:30 PM CST out", !w("2026-11-23T04:30:00Z"), null);
 t("window: Mon 3:59 AM CST in, 4:00 AM out", w("2026-11-23T09:59:00Z") && !w("2026-11-23T10:00:00Z"), null);
 t("window: Sun 11:30 PM CDT in", w("2026-06-01T04:30:00Z"), null);
 t("window: Saturday night out", !w("2026-11-22T05:30:00Z"), null);
+
+// Listings with swapped coordinates or a missing minus sign are put right; unusable ones are skipped.
+const fc = (a: number, b: number) => JSON.stringify(fixCoords(a, b));
+t("coords: swapped (Louisville)", fc(-85.5768670141697, 38.2857420777273) === JSON.stringify([38.2857420777273, -85.5768670141697]), fc(-85.5768670141697, 38.2857420777273));
+t("coords: missing minus (Fayetteville AR)", fc(36.05349, 94.13428) === JSON.stringify([36.05349, -94.13428]), fc(36.05349, 94.13428));
+t("coords: both the same skipped", fixCoords(41.865565, 41.865565) === null && fixCoords(-86.624148, -86.624148) === null, null);
+t("coords: garbled longitude skipped (Mesa AZ -11.86)", fixCoords(33.37969, -11.85907) === null, fc(33.37969, -11.85907));
+t("coords: normal, Hawaii and Alaska kept", fc(37.99, -87.51) === "[37.99,-87.51]" && fixCoords(21.3, -157.8) !== null && fixCoords(61.2, -149.9) !== null, null);
+t("row: swapped coordinates fixed", (rowOf({ id: "4171", name: "Thorntons", active: "1", address: "9400 Westport Rd", city_name: "Louisville", state_name: "Kentucky", lat: "-85.5768670141697", lng: "38.2857420777273", price_data: null }) || { lat: 0 }).lat === 38.2857420777273, null);

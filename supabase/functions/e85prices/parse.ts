@@ -57,6 +57,15 @@ export function priceDate(ts: unknown): string | null {
   return `${m[3]}-${m[1]}-${m[2]}`;
 }
 
+// A few listings have latitude and longitude swapped, or the minus sign missing from the longitude. Those are put
+// right; anything else outside the U.S. (lat 17 to 72, lon -180 to -64), or with both numbers the same, is skipped.
+export function fixCoords(lat: number, lon: number): [number, number] | null {
+  if (lat === lon) return null;
+  if (lat < 0 && lon >= 17 && lon <= 72) [lat, lon] = [lon, lat];
+  if (lat >= 17 && lat <= 72 && lon >= 64 && lon <= 180) lon = -lon;
+  return lat >= 17 && lat <= 72 && lon >= -180 && lon <= -64 ? [lat, lon] : null;
+}
+
 type Marker = Record<string, unknown> & { price_data?: { price_e85?: unknown; timestamp?: unknown } | null };
 export function rowOf(m: Marker) {
   if (String(m.active ?? "1") !== "1") return null;
@@ -64,12 +73,14 @@ export function rowOf(m: Marker) {
   const name = decode(m.name), street = decode(m.address);
   if (!Number.isInteger(id) || id <= 0 || !name) return null;
   if (m.lat === null || m.lat === undefined || m.lat === "" || m.lng === null || m.lng === undefined || m.lng === "") return null;
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const at = fixCoords(lat, lon);
+  if (!at) return null;
   const p = m.price_data || null, price = p ? Number(p.price_e85) : NaN;
   const ok = Number.isFinite(price) && price > 0.5 && price < 10;
   return {
     e85p_id: id, name: name.slice(0, 120), brand: brandOf(name), street: street.slice(0, 80) || null,
-    city: decode(m.city_name).slice(0, 60) || null, state: STATES[decode(m.state_name).toLowerCase().replace(/-/g, " ")] ?? null, lat, lon,
+    city: decode(m.city_name).slice(0, 60) || null, state: STATES[decode(m.state_name).toLowerCase().replace(/-/g, " ")] ?? null, lat: at[0], lon: at[1],
     price: ok ? Math.round(price * 1000) / 1000 : null, price_date: ok ? priceDate(p!.timestamp) : null,
   };
 }
