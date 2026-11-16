@@ -8,6 +8,9 @@
     my_stations: [{ user_id: uid, station_key: "id:st-moto", display_name: "MotoMart · E Lloyd Expy", value: 66.2, sd: 1.8, n_mine: 9, n_total: 40, last_value: 64, last_date: "2026-10-30", switch_date: "2026-10-08", switch_from: 78.4, switch_to: 66.6 }],
     station_estimates: [{ station_key: "id:st-speedway", display_name: "Speedway · Main St", value: 72, sd: 3, n_fills: 14, n_owners: 4 }, { station_key: "id:st-moto", display_name: "MotoMart · E Lloyd Expy", value: 66.2, sd: 1.8, n_fills: 40, n_owners: 8 }],
   };
+  // A test can start signed in with given settings (an older member's profile) by setting __preset before a reload.
+  let preset = null; try { preset = JSON.parse(sessionStorage.getItem("__preset") || "null"); } catch (e) { preset = null; }
+  if (preset) db.profiles[0].settings = preset;
   window.__db = db; window.__calls = [];
   window.__known = [
     { id: "st-speedway", source: "custom", name: "Speedway · Main St", brand: "Speedway", street: "Main St", city: "Evansville", state: "IN", standardized: true, distance_m: 60, members: 4, mine: 0, added_by_you: true, can_rename: true, can_delete: true,
@@ -17,7 +20,7 @@
     { id: "afdc-casey", source: "afdc", name: "Casey's · 2031 N Cross Pointe Blvd", brand: "Casey's", street: "2031 N Cross Pointe Blvd", city: "Evansville", state: "IN", standardized: true, distance_m: 6100, members: 1, mine: 0,
       fuels: [{ fuel: "87 octane", last_month: "2026-11", n: 1, price: 2.85, price_month: "2026-11" }], e85: null, listed: { e85: true, status: "E", blender: true, blends: ["E15"], hours: "4am-12am daily", confirmed: "2026-04" } },
   ];
-  let listener = null, session = null;
+  let listener = null, session = preset ? { user: { id: uid, email: "jason.a.church@shadyacres.my" } } : null;
   function q(table) {
     const st = { table, filters: [], op: "select", payload: null, single: false, maybe: false };
     const api = {

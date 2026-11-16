@@ -57,3 +57,14 @@ const rowsN = C.deriveRows([
 t("null odometer: sorted first on its day", rowsN.map((r) => r.f.id).join("") === "abc", rowsN.map((r) => r.f.id));
 t("null odometer: no miles to or from it", rowsN[0].miles === null && rowsN[1].miles === null && rowsN[2].miles === 148, rowsN.map((r) => r.miles));
 t("null odometer: next before reading not borrowed", rowsN[0].blend === 49 && rowsN[1].blendSrc === "next", rowsN.map((r) => [r.blend, r.blendSrc]));
+// Station names: brand spelling, and city, state and ZIP split out of the street
+t("brand: standard spelling used as is", JSON.stringify(C.brandFix("caseys")) === '{"brand":"Casey\'s","sure":true}' && C.brandFix("Hucks").brand === "Huck's" && C.brandFix("Shell") === null, C.brandFix("caseys"));
+t("brand: misspelling offered", JSON.stringify(C.brandFix("Cheveron")) === '{"brand":"Chevron","sure":false}' && C.brandFix("Speedy") === null && C.brandFix("Goodstop") === null, C.brandFix("Cheveron"));
+t("brand: store number dropped", C.tidyBrand("Thorntons #84") === "Thorntons" && C.tidyBrand("Casey's Store 3021") === "Casey's", C.tidyBrand("Thorntons #84"));
+const sa = (x) => JSON.stringify(C.splitAddress(x));
+t("address: city/state/ZIP after the street", sa("Center Ridge Rd Westlake OH 44145") === '{"street":"Center Ridge Rd","city":"Westlake","state":"OH","postcode":"44145"}', sa("Center Ridge Rd Westlake OH 44145"));
+t("address: with commas and full words", sa("4951 Eldorado Parkway, McKinney, Texas 75070") === '{"street":"4951 Eldorado Pkwy","city":"McKinney","state":"TX","postcode":"75070"}', sa("4951 Eldorado Parkway, McKinney, Texas 75070"));
+t("address: route numbers", sa("2000 US 41 N Henderson KY") === '{"street":"2000 US 41 N","city":"Henderson","state":"KY","postcode":null}' && C.splitAddress("1213 NC Highway 711 Lumberton NC 28358").street === "1213 NC Hwy 711", sa("2000 US 41 N Henderson KY"));
+t("address: street alone is tidied, not split", sa("813 N St Joseph Ave") === '{"street":"813 N St Joseph Ave","city":null,"state":null,"postcode":null}' && C.splitAddress("w ventura boulevard").street === "W Ventura Blvd" && C.splitAddress("Parkway Dr").street === "Parkway Dr" && C.splitAddress("Main Ct").state === null, sa("w ventura boulevard"));
+const cs = C.cleanStation("Cheveron", "Victoria");
+t("clean station: suggestion and missing number", cs.suggest === "Chevron" && cs.needsNumber && cs.label === "Cheveron · Victoria" && C.cleanStation("Shell", "4951 Eldorado Pkwy").needsNumber === false, cs);

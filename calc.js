@@ -192,6 +192,133 @@
     return { station, date, fuel, octane, ethanol, gallons, price, total, confident: consistent };
   }
 
+  // ---------- station names ----------
+  // Known brands, so a typed name can be spelled the standard way ("caseys" -> "Casey's") or a likely misspelling
+  // offered a fix ("Cheveron" -> Chevron). The same list names DOE stations.
+  const STATION_BRANDS = [
+    "7-Eleven", "ARCO", "BP", "Break Time", "Bucky's", "Buc-ee's", "Casey's", "Cenex", "Chevron", "Circle K", "Citgo", "Clark", "Conoco",
+    "Costco", "CountryMark", "Exxon", "Family Express", "Fareway", "Fas Mart", "Flying J", "Gas America", "GetGo", "Gulf", "Holiday", "Huck's",
+    "Hy-Vee", "Kroger", "Kum & Go", "Kwik Fill", "Kwik Shop", "Kwik Star", "Kwik Trip", "Love's", "Marathon", "Maverik", "Meijer", "Mobil",
+    "MotoMart", "Murphy USA", "Phillips 66", "Pilot", "QuikTrip", "RaceTrac", "Ricker's", "Road Ranger", "Sam's Club", "Sheetz", "Shell",
+    "Sinclair", "Speedway", "Spinx", "Sunoco", "Thorntons", "Tom Thumb", "Valero", "Walmart", "Wawa",
+  ];
+  const brandKey = (s) => String(s || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+  // Edits to turn a into b (insert, delete, change or swap two neighbouring letters).
+  function editDistance(a, b) {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[a.length][b.length];
+  }
+  // { brand, sure }: sure means only spelling marks differ, so the standard name can be used as is.
+  function brandFix(input) {
+    const raw = String(input || "").replace(/\s+/g, " ").trim(), k = brandKey(raw);
+    if (k.length < 2) return null;
+    const same = STATION_BRANDS.find((b) => brandKey(b) === k);
+    if (same) return same === raw ? null : { brand: same, sure: true };
+    if (k.length < 4) return null;
+    const max = k.length >= 7 ? 2 : 1;
+    let best = null;
+    for (const b of STATION_BRANDS) {
+      const bk = brandKey(b);
+      if (Math.abs(bk.length - k.length) > max) continue;
+      const dist = editDistance(k, bk);
+      if (dist <= max && (!best || dist < best.dist)) best = { brand: b, dist };
+    }
+    return best ? { brand: best.brand, sure: false } : null;
+  }
+  // Store numbers don't belong in the name: "Thorntons #84" -> "Thorntons".
+  const tidyBrand = (s) => String(s || "").replace(/\s+/g, " ").trim().replace(/\s*(#|no\.|store)\s*\d+.*$/i, "").trim();
+
+  const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
+  const STATE_NAMES = {
+    alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA", colorado: "CO", connecticut: "CT", delaware: "DE", florida: "FL",
+    georgia: "GA", hawaii: "HI", idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA", kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME",
+    maryland: "MD", massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS", missouri: "MO", montana: "MT", nebraska: "NE",
+    nevada: "NV", "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND",
+    ohio: "OH", oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+    tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT", virginia: "VA", washington: "WA", "west virginia": "WV", wisconsin: "WI", wyoming: "WY",
+  };
+  const SUFFIX = {
+    road: "Rd", rd: "Rd", street: "St", st: "St", avenue: "Ave", ave: "Ave", av: "Ave", boulevard: "Blvd", blvd: "Blvd", drive: "Dr", dr: "Dr",
+    parkway: "Pkwy", pkwy: "Pkwy", pky: "Pkwy", highway: "Hwy", hwy: "Hwy", lane: "Ln", ln: "Ln", way: "Way", court: "Ct", ct: "Ct",
+    circle: "Cir", cir: "Cir", place: "Pl", pl: "Pl", trail: "Trl", trl: "Trl", terrace: "Ter", ter: "Ter", pike: "Pike", expressway: "Expy",
+    expy: "Expy", freeway: "Fwy", fwy: "Fwy", turnpike: "Tpke", tpke: "Tpke", square: "Sq", sq: "Sq", loop: "Loop", plaza: "Plz", plz: "Plz",
+    crossing: "Xing", xing: "Xing", bypass: "Byp", byp: "Byp", route: "Rte", rte: "Rte",
+  };
+  const DIRS = { north: "N", south: "S", east: "E", west: "W", northeast: "NE", northwest: "NW", southeast: "SE", southwest: "SW",
+    n: "N", s: "S", e: "E", w: "W", ne: "NE", nw: "NW", se: "SE", sw: "SW" };
+  const ROUTE_WORDS = new Set(["us", "sr", "cr", "fm", "hwy", "highway", "route", "rte", "state", "i"]);
+  const bare = (t) => t.toLowerCase().replace(/[.,]+$/, "");
+  const isNum = (t) => /^\d+[a-z]?$/i.test(bare(t));
+  const titleWord = (t) => (/^\d/.test(t) ? t.toLowerCase() : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
+  // "w ventura boulevard" -> "W Ventura Blvd": standard suffix and direction abbreviations, and capitals when typed all one case.
+  function tidyStreet(street) {
+    const raw = String(street || "").replace(/\s+/g, " ").trim().replace(/[.,]+$/, "");
+    if (!raw) return "";
+    const oneCase = raw === raw.toLowerCase() || raw === raw.toUpperCase();
+    const toks = raw.split(" ");
+    const first = isNum(toks[0]) ? 1 : 0;
+    return toks.map((t, i) => {
+      const b = bare(t), rest = toks.slice(i + 1).map(bare);
+      const tailOnly = rest.every((x) => isNum(x) || DIRS[x]);
+      if (DIRS[b] && (i === first || i === toks.length - 1) && toks.length > 1) return DIRS[b];
+      if (SUFFIX[b] && i > first && tailOnly) return SUFFIX[b];
+      if (oneCase) return (b.length <= 2 && (STATES.includes(b.toUpperCase()) || ROUTE_WORDS.has(b)) && i < toks.length - 1 && isNum(toks[i + 1])) ? b.toUpperCase() : titleWord(t);
+      return t;
+    }).join(" ");
+  }
+  // Splits "4951 Eldorado Pkwy, McKinney TX 75070" or "Center Ridge Rd Westlake OH 44145" into street, city, state and ZIP.
+  function splitAddress(text) {
+    let raw = String(text || "").replace(/\s+/g, " ").trim().replace(/[.,]+$/, "").replace(/,?\s*(usa|united states)$/i, "");
+    const out = { street: raw, city: null, state: null, postcode: null };
+    if (!raw) return { ...out, street: "" };
+    // State and ZIP at the end, then the city between them and the street.
+    const parts = raw.split(",").map((x) => x.trim()).filter(Boolean);
+    let toks = (parts.length > 1 ? parts.slice(1).join(" ") : raw).split(" ");
+    const zipAt = toks.length - 1;
+    if (/^\d{5}(-\d{4})?$/.test(toks[zipAt]) && (parts.length > 1 || toks.length > 2)) { out.postcode = toks[zipAt]; toks = toks.slice(0, -1); }
+    const last = toks[toks.length - 1] || "", last2 = toks.slice(-2).join(" ").toLowerCase();
+    if (toks.length >= 2 && STATE_NAMES[last2]) { out.state = STATE_NAMES[last2]; toks = toks.slice(0, -2); }
+    else if (STATE_NAMES[last.toLowerCase()] && (parts.length > 1 || toks.length > 2)) { out.state = STATE_NAMES[last.toLowerCase()]; toks = toks.slice(0, -1); }
+    else if (STATES.includes(last.toUpperCase()) && (last === last.toUpperCase() || out.postcode || parts.length > 1) && (parts.length > 1 || toks.length > 2)) { out.state = last.toUpperCase(); toks = toks.slice(0, -1); }
+    if (parts.length > 1) {
+      out.street = parts[0];
+      out.city = toks.join(" ").trim() || null;
+    } else if (out.state || out.postcode) {
+      // The city starts after the street's last suffix (Rd, Ave...) or route number (US 41 N), if there is one.
+      let anchor = -1;
+      toks.forEach((t, i) => {
+        const b = bare(t);
+        if (i > 0 && SUFFIX[b] && !ROUTE_WORDS.has(b)) anchor = i;
+        if (ROUTE_WORDS.has(b) && toks[i + 1] && isNum(toks[i + 1])) anchor = i + 1;
+      });
+      if (anchor >= 0) { while (anchor + 1 < toks.length && (isNum(toks[anchor + 1]) || DIRS[bare(toks[anchor + 1])])) anchor++; }
+      if (anchor >= 0 && anchor < toks.length - 1) { out.street = toks.slice(0, anchor + 1).join(" "); out.city = toks.slice(anchor + 1).join(" "); }
+      else out.street = toks.join(" ");
+    }
+    out.street = tidyStreet(out.street);
+    if (out.city) { const c = out.city.replace(/[.,]+$/, ""); out.city = c === c.toLowerCase() || c === c.toUpperCase() ? c.split(" ").map(titleWord).join(" ") : c; }
+    return out;
+  }
+  const hasStreetNumber = (street) => /^\d+[a-z]?(-\d+)?\s/i.test(String(street || "").trim());
+  // Everything the add-station form needs: the cleaned name and place, and what to point out.
+  function cleanStation(brand, street) {
+    const b0 = tidyBrand(brand), fix = brandFix(b0);
+    const a = splitAddress(street);
+    const b = fix && fix.sure ? fix.brand : b0;
+    return {
+      brand: b, suggest: fix && !fix.sure ? fix.brand : null, street: a.street, city: a.city, state: a.state, postcode: a.postcode,
+      label: [b || "Brand", a.street].filter(Boolean).join(" · "),
+      place: [a.city, [a.state, a.postcode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+      needsStreet: !a.street, needsNumber: !!a.street && !hasStreetNumber(a.street),
+    };
+  }
+
   root.Calc = { TANK, BAND, GRADES, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, keyFor, withDefaults, maxTarget,
-    gasEthanol, seasonalDefault, stopTotals, e85Assumption, plan, bandOf, deriveRows, summarize, addMonths, oilStatus, parseReceiptText };
+    gasEthanol, seasonalDefault, stopTotals, e85Assumption, plan, bandOf, deriveRows, summarize, addMonths, oilStatus, parseReceiptText,
+    BRANDS: STATION_BRANDS, brandFix, tidyBrand, tidyStreet, splitAddress, hasStreetNumber, cleanStation };
 })(typeof window !== "undefined" ? window : globalThis);

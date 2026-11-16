@@ -210,7 +210,7 @@
           ${S.pumpConfirm ? (() => { const n = S.pumpConfirm === "primary" ? s.primaryE85 : S.pump.other ? S.pump.other.name : ""; return `<div class="confirm" role="alert"><span class="grow">Remove ${esc(n)} ${S.pumpConfirm === "primary" ? "as your primary E85 station" : "from this plan"}? You'll choose a station again.</span><button type="button" class="btn danger" data-act="pumpRemove">Remove</button><button type="button" class="btn" data-act="pumpKeep">Keep</button></div>`; })()
             : s.primaryE85 || S.pump.other ? `<p class="small muted">Double-tap a station to remove it.</p>` : ""}
           ${S.pump.which === "other" ? `<button type="button" class="link" data-act="pickOther" style="justify-self:start">${S.pump.other ? "Change station" : "Choose the station"}</button>` : ""}
-          ${s.primaryE85 && !s.primaryE85Id ? `<p class="small muted">Your primary station isn't matched to the shared station list yet. <a class="link" href="#car">Match it</a> so members' data lines up.</p>` : ""}</div>
+          ${unmatchedHtml(s)}</div>
         <p class="small muted">Gas: ${esc(s.primaryGas || "your gas station")} · ${s.ethanolFree ? "ethanol-free " : ""}${s.gasGrade} octane (E${C.gasEthanol(s)})</p>
       </section>
       <div id="pumpSuggest">${suggestHtml()}</div>
@@ -257,6 +257,24 @@
       <p class="small soft">${p ? "" : "Enter DTE and the flex sensor reading. "}E85 assumed at E${Math.round(as.value)} ±${Math.max(1, Math.round(as.sd))} (${esc(as.why)}).${last}${biasNote}${p ? ` About ${p.R.toFixed(1)} gal left in the tank.` : ""} Red line: your tune's E${s.tuneLimit} limit.</p>`;
     $("#planWarn").innerHTML = warn.map(([k, t]) => `<div class="banner ${k}">${esc(t)}</div>`).join("");
     const btn = $("#logPlan"); if (btn) btn.disabled = !p || (p.clamped === "zero" && p.overCap);
+  }
+
+  // Primary stations typed in before the shared station list existed. Matching them links your fills to what
+  // members learn about each station. The same typed name for E85 and gas is matched once.
+  function unmatchedPrimaries(s) {
+    const out = [];
+    for (const k of ["primaryE85", "primaryGas"]) {
+      if (!s[k] || s[k + "Id"]) continue;
+      const same = out.find((u) => u.name === s[k]);
+      if (same) same.keys.push(k); else out.push({ name: s[k], keys: [k] });
+    }
+    return out;
+  }
+  function unmatchedHtml(s) {
+    const u = unmatchedPrimaries(s);
+    if (!u.length) return "";
+    return `<div class="banner info" style="display:grid;gap:6px;justify-content:stretch"><span>${u.map((x) => `<b>${esc(x.name)}</b>`).join(" and ")} ${u.length > 1 ? "aren't" : "isn't"} on the shared station list yet. Pick ${u.length > 1 ? "them" : "it"} from the list so your fills count toward what members learn there.</span>
+      ${u.map((x, i) => `<button type="button" class="link" style="justify-self:start" data-act="matchPrimary" data-i="${i}">Match ${esc(x.name)}${x.keys.length > 1 ? "" : x.keys[0] === "primaryGas" ? " (gas)" : " (E85)"}</button>`).join("")}</div>`;
   }
 
   // ---------- log a fill ----------
@@ -745,10 +763,19 @@
   // ---------- stations ----------
   // One shared record per station, named Brand · Street. A station shows up for every member once a member who
   // shares has logged a fill there. The phone's location only sorts stations and spots duplicates; fills never store it.
-  const BRANDS = ["7-Eleven", "BP", "Buc-ee's", "Casey's", "Chevron", "Circle K", "Citgo", "Costco", "Exxon", "Flying J", "GetGo", "Holiday", "Huck's", "Hy-Vee", "Kroger", "Kum & Go", "Kwik Trip", "Love's", "Marathon", "Maverik", "Meijer", "Mobil", "MotoMart", "Murphy USA", "Phillips 66", "Pilot", "QuikTrip", "RaceTrac", "Sam's Club", "Sheetz", "Shell", "Speedway", "Sunoco", "Thorntons", "Valero", "Walmart", "Wawa"];
+  const BRANDS = C.BRANDS;
   const distTxt = (m) => (m === null || m === undefined ? "" : m < 160 ? `${Math.max(10, Math.round((m * 3.281) / 10) * 10)} ft` : `${(m / 1609.34).toFixed(m < 16000 ? 1 : 0)} mi`);
   const monthTxt = (ym) => { if (!ym) return ""; const [y, m] = String(ym).split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
-  const previewName = (f) => [String(f.brand || "").trim() || "Brand", String(f.street || "").trim()].filter(Boolean).join(" · ");
+  const previewName = (f) => C.cleanStation(f.brand, f.street).label;
+  // What the add or rename form points out as you type: a likely misspelled brand, a missing street or street number.
+  function nameHints(brand, street, fixAct) {
+    const c = C.cleanStation(brand, street), out = [];
+    if (c.suggest) out.push(`<p class="small">Did you mean <button type="button" class="link" data-act="${fixAct}" data-b="${esc(c.suggest)}">${esc(c.suggest)}</button>?</p>`);
+    if (String(brand || "").trim().length >= 2 && c.needsStreet) out.push(`<p class="small muted">Add the street, like 6328 E Lloyd Expy, so members can tell stations apart.</p>`);
+    else if (c.needsNumber) out.push(`<p class="small muted">Add the street number if you can see it, like 6328 E Lloyd Expy. It tells two stations on the same road apart.</p>`);
+    return out.join("");
+  }
+  const placeTxt = (f) => { const p = C.cleanStation(f.brand, f.street).place; return p ? ` · ${p}` : ""; };
   function watchGeoPermission() {
     try { navigator.permissions.query({ name: "geolocation" }).then((p) => { S.geoPerm = p.state; p.onchange = () => { S.geoPerm = p.state; }; }, () => {}); } catch { /* not supported */ }
   }
@@ -792,8 +819,9 @@
   }
 
   // The picker: choose a station members use, or add one in the standard Brand · Street form.
-  function openPicker(target, kind) {
+  function openPicker(target, kind, opts = {}) {
     S.picker = { target, kind, q: "", step: "list", busy: false, error: "", locState: S.loc && Date.now() - S.loc.at < 120000 ? "ok" : "idle", cands: null, form: null, scrollY: window.scrollY };
+    if (opts.search) { S.picker.step = "add"; S.picker.lq = opts.search; S.picker.form = { id: null, brand: C.cleanStation(opts.search, "").brand, street: "" }; }
     try { history.pushState({ picker: true }, ""); } catch { /* ignore */ }
     render(); window.scrollTo(0, 0);
     refreshKnown(S.picker, S.geoPerm === "granted" && S.picker.locState !== "ok");
@@ -828,9 +856,10 @@
       cf[k] = label; cf[k + "Id"] = id;
       restore = () => { if (S.carForm === cf) { cf[k] = prev.name; cf[k + "Id"] = prev.id; } };
     } else if (t.type === "primaryNow") {
-      const prev = { name: S.settings.primaryE85, id: S.settings.primaryE85Id };
-      saveSettings({ ...S.settings, primaryE85: label, primaryE85Id: id }); S.pump.which = "primary";
-      restore = () => saveSettings({ ...S.settings, primaryE85: prev.name, primaryE85Id: prev.id }).then(render);
+      const keys = t.keys || ["primaryE85"], prev = {}, patch = {};
+      for (const k of keys) { prev[k] = S.settings[k]; prev[k + "Id"] = S.settings[k + "Id"]; patch[k] = label; patch[k + "Id"] = id; }
+      saveSettings({ ...S.settings, ...patch }).then(() => { if (!S.picker) render(); }); if (keys.includes("primaryE85")) S.pump.which = "primary";
+      restore = () => saveSettings({ ...S.settings, ...prev }).then(render);
     }
     closePicker();
     toast(`Station set to ${label}.`, "Undo", async () => {
@@ -972,18 +1001,19 @@
     return `<form class="card" data-form="pickSave" novalidate><h2>${esc(title)}</h2>
       <label class="field" for="pickBrand">Brand or station name<input id="pickBrand" type="text" list="brandList" maxlength="60" autocomplete="off" data-pk="brand" value="${esc(f.brand)}" placeholder="MotoMart, Casey's, Costco…"></label>
       <datalist id="brandList">${brands.map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
-      <label class="field" for="pickStreet">Street or road<input id="pickStreet" type="text" maxlength="80" autocomplete="off" data-pk="street" value="${esc(f.street)}" placeholder="E Lloyd Expy"></label>
-      <p class="small muted">Saved as <b id="pickPreview">${esc(previewName(f))}</b>${where}. Every member sees this name once you log a fill there.</p>
+      <label class="field" for="pickStreet">Street or road<input id="pickStreet" type="text" maxlength="80" autocomplete="off" data-pk="street" value="${esc(f.street)}" placeholder="6328 E Lloyd Expy"></label>
+      <div id="pickHints" aria-live="polite">${nameHints(f.brand, f.street, "pickBrandFix")}</div>
+      <p class="small muted">Saved as <b id="pickPreview">${esc(previewName(f))}</b><span id="pickPlace">${esc(placeTxt(f))}</span>${where}. Every member sees this name once you log a fill there.</p>
       ${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}
       <div class="row"><button class="btn primary grow" type="submit">${f.id ? "Confirm and use" : "Add and use"}</button><button type="button" class="btn" data-act="pickerBack">Back</button></div></form>`;
   }
   async function pickerSave() {
     const p = S.picker, f = p.form; p.error = "";
-    const brand = String(f.brand || "").trim(), street = String(f.street || "").trim();
+    const c0 = C.cleanStation(f.brand, f.street), brand = c0.brand, street = c0.street;
     if (brand.length < 2) { p.error = "Enter the brand or station name."; return renderPicker(); }
-    const at = p.locState === "ok" && S.loc;
-    const res = f.id ? await sb.rpc("standardize_station", { p_id: f.id, p_brand: brand, p_street: street })
-      : await sb.rpc("add_station", { p_brand: brand, p_street: street, p_lat: at ? S.loc.lat : null, p_lon: at ? S.loc.lon : null });
+    const at = p.locState === "ok" && S.loc, place = { p_city: c0.city, p_state: c0.state, p_postcode: c0.postcode };
+    const res = f.id ? await sb.rpc("standardize_station", { p_id: f.id, p_brand: brand, p_street: street, ...place })
+      : await sb.rpc("add_station", { p_brand: brand, p_street: street, p_lat: at ? S.loc.lat : null, p_lon: at ? S.loc.lon : null, ...place });
     if (S.picker !== p) return;
     if (res.error) { p.error = /too many/.test(res.error.message || "") ? "You've added 10 stations today. Try again tomorrow." : "Couldn't save the station. Check your connection and try again."; return renderPicker(); }
     const c = res.data, created = !f.id && c.source === "custom" && !(S.known || []).some((x) => x.id === c.id);
@@ -994,9 +1024,9 @@
   // Station page: what members know about one station.
   function openStation(id) { S.stationId = id; S.stationDetail = null; S.stEdit = null; S.stConfirmDelete = false; go("station"); }
   async function saveStationName() {
-    const se = S.stEdit, brand = String(se.brand || "").trim(), street = String(se.street || "").trim();
+    const se = S.stEdit, c0 = C.cleanStation(se.brand, se.street), brand = c0.brand, street = c0.street;
     if (brand.length < 2) { se.error = "Enter the brand or station name."; return render(); }
-    const { data, error } = await sb.rpc("standardize_station", { p_id: S.stationId, p_brand: brand, p_street: street });
+    const { data, error } = await sb.rpc("standardize_station", { p_id: S.stationId, p_brand: brand, p_street: street, p_city: c0.city, p_state: c0.state, p_postcode: c0.postcode });
     if (error || !data) { se.error = "Couldn't save the name. Check your connection and try again."; return render(); }
     S.stEdit = null; S.known = (S.known || []).map((k) => (k.id === data.id ? { ...k, ...data, distance_m: k.distance_m } : k));
     const { data: prof } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
@@ -1037,7 +1067,8 @@
     const manage = c.can_rename || c.can_delete ? `<section class="card"><h2>${c.added_by_you ? "You added this station" : "Fix this station"}</h2>
       ${se ? `<form class="gap" data-form="stSave" novalidate>
           <label class="field" for="st-brand">Brand or station name<input id="st-brand" type="text" maxlength="60" data-se="brand" value="${esc(se.brand)}"></label>
-          <label class="field" for="st-street">Street or road<input id="st-street" type="text" maxlength="80" data-se="street" value="${esc(se.street)}"></label>
+          <label class="field" for="st-street">Street or road<input id="st-street" type="text" maxlength="80" data-se="street" value="${esc(se.street)}" placeholder="6328 E Lloyd Expy"></label>
+          <div id="stHints" aria-live="polite">${nameHints(se.brand, se.street, "stBrandFix")}</div>
           ${se.error ? `<p class="note-err" role="alert">${esc(se.error)}</p>` : ""}
           <div class="row"><button class="btn primary grow" type="submit">Save name</button><button type="button" class="btn" data-act="stCancel">Cancel</button></div></form>`
         : S.stConfirmDelete ? `<div class="confirm"><span class="grow">Delete this station for good? Your fills there keep the name.</span><button type="button" class="btn danger" data-act="stDelete">Delete</button><button type="button" class="btn" data-act="stCancel">Keep it</button></div>`
@@ -1151,6 +1182,13 @@
     pickOther: () => openPicker({ type: "pumpOther" }, "e85"),
     pickStation: (el) => { const i = Number(el.dataset.i); openPicker({ type: "stop", i }, S.form.stops[i].kind); },
     pickPrimary: (el) => openPicker({ type: el.dataset.p === "gas" ? "primaryGas" : "primaryE85" }, el.dataset.p),
+    matchPrimary: (el) => {
+      const u = unmatchedPrimaries(S.settings)[Number(el.dataset.i)]; if (!u) return;
+      openPicker({ type: "primaryNow", keys: u.keys }, u.keys.includes("primaryE85") ? "e85" : "gas", { search: u.name });
+      lookup(S.picker);
+    },
+    pickBrandFix: (el) => { if (S.picker && S.picker.form) { S.picker.form.brand = el.dataset.b; renderPicker(); } },
+    stBrandFix: (el) => { if (S.stEdit) { S.stEdit.brand = el.dataset.b; render(); } },
     pickerClose: () => closePicker(),
     pickerLocate: () => refreshKnown(S.picker, true),
     pickerChoose: (el) => pickerChoose(el.dataset.id),
@@ -1220,9 +1258,14 @@
     const el = e.target;
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }
     if (el.id === "pickQ" && S.picker) { S.picker.q = el.value; renderPicker(); return; }
-    if (el.dataset.se && S.stEdit) { S.stEdit[el.dataset.se] = el.value; return; }
+    if (el.dataset.se && S.stEdit) { S.stEdit[el.dataset.se] = el.value; const h = $("#stHints"); if (h) h.innerHTML = nameHints(S.stEdit.brand, S.stEdit.street, "stBrandFix"); return; }
     if (el.id === "pickLookup" && S.picker) { const p = S.picker; p.lq = el.value; clearTimeout(p.lt); p.lt = setTimeout(() => lookup(p), 300); return; }
-    if (el.dataset.pk && S.picker && S.picker.form) { S.picker.form[el.dataset.pk] = el.value; const pv = $("#pickPreview"); if (pv) pv.textContent = previewName(S.picker.form); return; }
+    if (el.dataset.pk && S.picker && S.picker.form) {
+      const f = S.picker.form; f[el.dataset.pk] = el.value;
+      const pv = $("#pickPreview"), pl = $("#pickPlace"), h = $("#pickHints");
+      if (pv) pv.textContent = previewName(f); if (pl) pl.textContent = placeTxt(f); if (h) h.innerHTML = nameHints(f.brand, f.street, "pickBrandFix");
+      return;
+    }
     if (el.dataset.f && S.form) { S.form[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; if (el.dataset.f === "odometer") updateOdoHint(); return; }
     if (el.dataset.s && S.form) {
       const i = Number(el.dataset.i), st = S.form.stops[i], k = el.dataset.s;
