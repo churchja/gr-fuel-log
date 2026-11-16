@@ -40,3 +40,4 @@ t("coords: both the same skipped", fixCoords(41.865565, 41.865565) === null && f
 t("coords: garbled longitude skipped (Mesa AZ -11.86)", fixCoords(33.37969, -11.85907) === null, fc(33.37969, -11.85907));
 t("coords: normal, Hawaii and Alaska kept", fc(37.99, -87.51) === "[37.99,-87.51]" && fixCoords(21.3, -157.8) !== null && fixCoords(61.2, -149.9) !== null, null);
 t("row: swapped coordinates fixed", (rowOf({ id: "4171", name: "Thorntons", active: "1", address: "9400 Westport Rd", city_name: "Louisville", state_name: "Kentucky", lat: "-85.5768670141697", lng: "38.2857420777273", price_data: null }) || { lat: 0 }).lat === 38.2857420777273, null);
+t("row: listing without a U.S. state skipped", rowOf({ id: "9", name: "Esso", active: "1", address: "1 King St", city_name: "London", state_name: "Ontario", lat: "42.98", lng: "-81.25", price_data: null }) === null, null);

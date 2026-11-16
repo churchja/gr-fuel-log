@@ -36,8 +36,12 @@ station from either list shows up for every member:
   (`e85prices-weekly`, scheduled at both 04:30 and 05:30 UTC Monday to cover daylight saving time). The function
   does nothing outside that window or a second time in the same week. It reads one page
   (`https://e85prices.com/e85map`) into `e85p_stations`, and `link_e85p()` ties each listing to a DOE or member
-  station at the same place (within 300 m sharing the brand or street number, or within 3 km sharing both) or
-  adds it as a station of its own. Their last E85 price shows only if it was reported in the last 3 months.
+  station at the same place (within 300 m sharing the brand or street number, or within 3 km sharing both;
+  a matching street number wins over a nearer listing) or adds it as a station of its own. A listing is set
+  aside, not added, when a listed station of the same brand is within 300 m, at the same street number within
+  3 km, or at the same street number and city within 15 km: these are repeats or pins copied from another
+  station. The parser repairs swapped coordinates and a missing minus sign, and skips listings outside the U.S.
+  or with unusable coordinates. Their last E85 price shows only if it was reported in the last 3 months.
   Usernames on the site are never kept.
 
 ## Running the tests

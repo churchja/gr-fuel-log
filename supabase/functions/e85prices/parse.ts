@@ -76,11 +76,14 @@ export function rowOf(m: Marker) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const at = fixCoords(lat, lon);
   if (!at) return null;
+  // Only U.S. stations: a listing without a U.S. state is skipped.
+  const state = STATES[decode(m.state_name).toLowerCase().replace(/-/g, " ")];
+  if (!state) return null;
   const p = m.price_data || null, price = p ? Number(p.price_e85) : NaN;
   const ok = Number.isFinite(price) && price > 0.5 && price < 10;
   return {
     e85p_id: id, name: name.slice(0, 120), brand: brandOf(name), street: street.slice(0, 80) || null,
-    city: decode(m.city_name).slice(0, 60) || null, state: STATES[decode(m.state_name).toLowerCase().replace(/-/g, " ")] ?? null, lat: at[0], lon: at[1],
+    city: decode(m.city_name).slice(0, 60) || null, state, lat: at[0], lon: at[1],
     price: ok ? Math.round(price * 1000) / 1000 : null, price_date: ok ? priceDate(p!.timestamp) : null,
   };
 }
