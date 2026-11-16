@@ -25,11 +25,28 @@ and estimates each car's flex-sensor offset from how its readings compare with o
 stations. Accuracy is measured honestly: each fill is predicted before its reading is used. See
 `supabase/functions/learn/model.ts`.
 
+## Station lists
+
+Members pick stations from one shared list, named Brand · Street. Two public E85 lists fill it in, and each
+station from either list shows up for every member:
+
+- **U.S. DOE Alternative Fuels Data Center**, loaded Mondays by `supabase/functions/afdc` (`afdc-weekly`).
+- **E85prices.com** (Renewable Fuels Association), used with RFA's permission. RFA allows the download once a week,
+  Sundays between 11 PM and 4 AM Central. `supabase/functions/e85prices` runs Sundays at 11:30 PM Central
+  (`e85prices-weekly`, scheduled at both 04:30 and 05:30 UTC Monday to cover daylight saving time). The function
+  does nothing outside that window or a second time in the same week. It reads one page
+  (`https://e85prices.com/e85map`) into `e85p_stations`, and `link_e85p()` ties each listing to a DOE or member
+  station at the same place (within 300 m sharing the brand or street number, or within 3 km sharing both) or
+  adds it as a station of its own. Their last E85 price shows only if it was reported in the last 3 months.
+  Usernames on the site are never kept.
+
 ## Running the tests
 
 ```
 node test/calc.test.mjs
 node --experimental-strip-types test/model.test.ts
+node --experimental-strip-types test/afdc.test.ts
+node --experimental-strip-types test/e85prices.test.ts
 node test/ui.test.js
 ```
 
@@ -67,7 +84,7 @@ select net.http_post(
    New accounts get new ids, so map each old `id` to the new one by email.
 3. With that mapping, insert `profiles`, `fills` and `oil_changes` (rewrite `id` and `user_id`), then the
    `member_stations` rows (rewrite `created_by` and `std_by`), using the service role.
-4. Everything else rebuilds itself: map and DOE stations reload on their own, and the `learn` function
+4. Everything else rebuilds itself: map, DOE and E85prices.com stations reload on their own, and the `learn` function
    recomputes E85 strength, sensor offsets and fuel-left curves after the first fill is saved.
 
 The file holds members' email addresses and fill history; keep it private.

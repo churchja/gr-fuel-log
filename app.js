@@ -791,17 +791,22 @@
     if (!error) S.known = data || [];
     return !error;
   }
+  // E85prices.com (Renewable Fuels Association): whether it lists a station, and an E85 price from the last 3 months.
+  const e85pListed = (c) => !!(c && c.e85prices && c.e85prices.listed);
+  const e85pPrice = (c) => (c && c.e85prices && c.e85prices.price ? `E85 $${Number(c.e85prices.price).toFixed(2)} on ${fmtShort(c.e85prices.price_date)} (E85prices.com)` : "");
+  const listedTxt = (by) => (by === "both" ? "on the DOE and E85prices.com lists" : by === "e85prices" ? "on the E85prices.com list" : "on the U.S. DOE E85 list");
   function fuelChips(c, max = 3) {
     return (c.fuels || []).slice(0, max).map((f) => `<span class="chip ${f.fuel === "E85" ? "on" : "none"}">${esc(f.fuel.replace(" octane", ""))}${f.price ? ` · $${Number(f.price).toFixed(2)}` : ""}</span>`).join("");
   }
   function stationRow(c, act) {
-    const sub = [[c.city, c.state].filter(Boolean).join(", "), c.members ? `${c.members} member${c.members === 1 ? "" : "s"}` : "", c.mine ? "you've used it" : ""].filter(Boolean).join(" · ");
-    const listed = c.listed && c.listed.e85 && !(c.fuels || []).some((f) => f.fuel === "E85") ? `<span class="chip none">E85 listed</span>` : "";
+    const memberE85 = (c.fuels || []).some((f) => f.fuel === "E85");
+    const sub = [[c.city, c.state].filter(Boolean).join(", "), c.members ? `${c.members} member${c.members === 1 ? "" : "s"}` : "", c.mine ? "you've used it" : "", memberE85 ? "" : e85pPrice(c)].filter(Boolean).join(" · ");
+    const listed = ((c.listed && c.listed.e85) || e85pListed(c)) && !memberE85 ? `<span class="chip none">E85 listed</span>` : "";
     const e85 = c.e85 ? `<span class="chip target">E${Math.round(c.e85.value)}</span>` : listed;
     return `<button type="button" class="srow" data-act="${act}" data-id="${esc(c.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(c.name)}</b>${sub ? `<span class="small muted">${esc(sub)}</span>` : ""}${e85 || (c.fuels || []).length ? `<span class="badges">${e85}${fuelChips(c)}</span>` : ""}</span><span class="dist">${distTxt(c.distance_m)}</span></button>`;
   }
   function candRow(x) {
-    const where = [[x.city, x.state].filter(Boolean).join(", "), x.known ? "members use it" : x.e85_listed ? "on the U.S. DOE E85 list" : "on the map", x.standardized ? "" : "you'll confirm the name"].filter(Boolean).join(" · ");
+    const where = [[x.city, x.state].filter(Boolean).join(", "), x.known ? "members use it" : x.e85_listed ? listedTxt(x.listed_by) : "on the map", e85pPrice(x), x.standardized ? "" : "you'll confirm the name"].filter(Boolean).join(" · ");
     return `<button type="button" class="srow" data-act="pickerChoose" data-id="${esc(x.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(x.name)}</b><span class="small muted">${esc(where)}</span></span><span class="dist">${distTxt(x.distance_m)}</span></button>`;
   }
   async function lookup(p) {
@@ -882,7 +887,7 @@
       ${p.step === "list" ? `<label class="field" for="pickQ">Search stations<input id="pickQ" type="search" autocomplete="off" value="${esc(p.q)}" placeholder="Brand, street or city"></label>` : ""}
       ${p.step === "add" ? `<label class="field" for="pickLookup">Search the E85 station list and map<input id="pickLookup" type="search" autocomplete="off" value="${esc(p.lq || "")}" placeholder="Brand, street, city or ZIP"></label>` : ""}
       <div id="pickBody" class="gap">${pickerBody()}</div>
-      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. E85 station list: U.S. DOE Alternative Fuels Data Center. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>`;
+      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>`;
   }
   function renderPicker() { if (!S.picker) return; const el = $("#pickBody"); if (el) el.innerHTML = pickerBody(); else render(); }
   function pickerBody() {
@@ -1055,10 +1060,14 @@
     const fuels = c.fuels.length ? `<table><thead><tr><th>Fuel</th><th class="n">Latest price</th><th class="n">Last seen</th></tr></thead><tbody>${c.fuels.map((f) => `<tr><td>${esc(f.fuel)}</td><td class="n">${f.price ? `$${Number(f.price).toFixed(2)}<br><span class="small muted">${monthTxt(f.price_month)}</span>` : "—"}</td><td class="n">${monthTxt(f.last_month)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted small">No fills logged here yet.</p>`;
     const e = c.e85;
     const e85 = e ? `<section class="dark"><h2>Real E85 strength</h2><span class="big" style="font:700 40px/1 var(--display)">E${Math.round(e.value)} <span style="font-size:22px">±${Math.max(1, Math.round(e.sd))}</span></span><p class="small soft">Measured from ${e.n} fill${e.n === 1 ? "" : "s"}${e.last_month ? `, latest ${monthTxt(e.last_month)}` : ""}.${e.switch_month ? ` Blend switch spotted ${monthTxt(e.switch_month)}, from E${e.switch_from} to E${e.switch_to}.` : ""}</p></section>`
-      : c.fuels.some((f) => f.fuel === "E85") || (c.listed && c.listed.e85) ? `<section class="dark"><h2>Real E85 strength</h2><p class="small soft">Not measured yet. It's worked out from fills with flex sensor readings before and after filling.</p></section>` : "";
+      : c.fuels.some((f) => f.fuel === "E85") || (c.listed && c.listed.e85) || e85pListed(c) ? `<section class="dark"><h2>Real E85 strength</h2><p class="small soft">Not measured yet. It's worked out from fills with flex sensor readings before and after filling.</p></section>` : "";
     const L = c.listed;
     const doe = L ? `<section class="card"><h2>U.S. DOE E85 list</h2>${L.e85 ? `<p>${L.status === "T" ? "<b>Listed as temporarily unavailable.</b> " : ""}Listed as selling E85${L.blender ? " from a blender pump" : ""}${(L.blends || []).length ? `, also ${esc(L.blends.join(", "))}` : ""}.</p>${L.hours ? `<p class="small muted">Hours: ${esc(L.hours)}</p>` : ""}${L.confirmed ? `<p class="small muted">Last confirmed by DOE ${monthTxt(L.confirmed)}.</p>` : ""}` : `<p>No longer on the DOE list.</p>`}
       <p class="small muted">Members' fills count for more than the list. Spot a mistake? Report it on the <a href="https://afdc.energy.gov/stations" target="_blank" rel="noopener">DOE station locator</a>.</p></section>` : "";
+    const P = c.e85prices;
+    const e85p = P ? `<section class="card"><h2>E85prices.com</h2><p>${P.listed ? "Listed as selling E85." : "No longer on the E85prices.com list."}
+        ${P.price ? `Last reported E85 price: <b>$${Number(P.price).toFixed(2)}</b> on ${fmtShort(P.price_date)}.` : P.listed ? "No E85 price reported there in the last 3 months." : ""}</p>
+      <p class="small muted">Prices on <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association) are reported by drivers.</p></section>` : "";
     const byFuel = new Map();
     for (const r of d.prices) { if (!byFuel.has(r.fuel)) byFuel.set(r.fuel, []); byFuel.get(r.fuel).push(r); }
     const hist = byFuel.size ? [...byFuel.entries()].map(([fuel, rows]) => `<div class="stack" style="gap:6px"><b>${esc(fuel)}</b>${priceSpark(rows)}<span class="small muted">${rows.slice(-4).map((r) => `${monthTxt(r.month)}: $${Number(r.price).toFixed(2)}`).join(" · ")}</span></div>`).join("")
@@ -1079,7 +1088,7 @@
         <p class="small muted">${c.members} member${c.members === 1 ? "" : "s"} fill here${c.mine ? ` · you've logged ${c.mine} stop${c.mine === 1 ? "" : "s"} here` : ""}</p></div>
       ${e85}
       <section class="card"><h2>Fuels sold here</h2>${fuels}</section>
-      ${doe}
+      ${doe}${e85p}
       <section class="card"><h2>Price history</h2>${hist}</section>
       ${manage}
       <p class="small muted">From fills logged by members who share. Other members' prices are shown by month, and who filled where is never shown.</p>`;
