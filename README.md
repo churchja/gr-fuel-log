@@ -37,11 +37,15 @@ station from either list shows up for every member:
   does nothing outside that window or a second time in the same week. It reads one page
   (`https://e85prices.com/e85map`) into `e85p_stations`, and `link_e85p()` ties each listing to a DOE or member
   station at the same place (within 300 m sharing the brand or street number, or within 3 km sharing both;
-  a matching street number wins over a nearer listing) or adds it as a station of its own. A listing is set
-  aside, not added, when a listed station of the same brand is within 300 m, at the same street number within
-  3 km, or at the same street number and city within 15 km: these are repeats or pins copied from another
-  station. The parser repairs swapped coordinates and a missing minus sign, and skips listings outside the U.S.
-  or with unusable coordinates. Their last E85 price shows only if it was reported in the last 3 months.
+  a matching street number wins over a nearer listing) or adds it as a station of its own. A listing at the
+  same brand, street number, city and state as a DOE station (even with its pin up to 200 km off) is that DOE
+  station: it moves onto it, or is set aside if that station already has a listing. A listing is also set aside
+  when a listed station of the same brand is within 300 m, or at the same street number within 3 km: these are
+  repeats or pins copied from another station. Pins we found in the wrong state are listed in `e85p_suppressed`
+  (by listing and coordinates, so a corrected listing comes back by itself). The parser repairs swapped
+  coordinates and a missing minus sign, and skips listings outside the U.S. or with unusable coordinates. The
+  weekly job runs at 04:30-08:30 UTC Mondays; the function only acts inside RFA's window, so the first slot in
+  the window runs and later ones retry only if it failed. Their last E85 price shows only if it was reported in the last 3 months.
   Usernames on the site are never kept.
 - **Pausing E85prices.com.** One switch hides their stations, prices and listings from members:
   `update public.app_config set e85p_enabled = false where id = 1;` plus `select cron.unschedule('e85prices-weekly');`
