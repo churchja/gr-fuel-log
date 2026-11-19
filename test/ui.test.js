@@ -147,12 +147,15 @@ const W = path.resolve(__dirname, "..");
   // Stop 1: phone OCR reads the E85 receipt fully
   await page.evaluate(() => { window.__ocrText = "MOTOMART #1234\n6328 E LLOYD EXPY\n11/05/26\nE85 FLEX FUEL\nGALLONS 5.312\nPRICE/GAL $2.379\nFUEL SALE $12.64"; });
   const img = W + "/icons/icon-192.png";
+  const cam = await page.evaluate(() => ({ cam: document.querySelector("#ph0").getAttribute("capture"), lib: document.querySelector("#pl0") && document.querySelector("#pl0").getAttribute("capture") }));
+  log("3c scan opens the camera:", JSON.stringify(cam), "| buttons:", (await page.locator("#stops .stop").first().locator(".row").last().innerText()).replace(/\n+/g, " | "));
+  if (cam.cam !== "environment" || cam.lib !== null) throw new Error("Scan receipt should open the camera, and Choose a photo the library");
   await page.setInputFiles("#ph0", img);
   await page.waitForSelector("#stops .note-ok");
   log("4 stop 1 after phone read:", JSON.stringify(await page.evaluate(() => ({ st: document.querySelector("#st0").textContent.trim(), g: document.querySelector("#ga0").value, p: document.querySelector("#pr0").value, t: document.querySelector("#to0").value }))));
   // Stop 2: phone OCR misses gallons -> offer Claude -> Claude fills it
   await page.evaluate(() => { window.__ocrText = "COSTCO\nPREMIUM\nTHANK YOU"; });
-  await page.setInputFiles("#ph1", img);
+  await page.setInputFiles("#pl1", img);   // a photo picked from the library
   await page.waitForSelector("[data-act=claudeRead]");
   log("5 stop 2 offer:", await page.locator("[data-act=claudeRead]").innerText());
   await shot("log");

@@ -372,7 +372,8 @@
         <label class="field" for="pr${i}">$ per gal<input id="pr${i}" type="number" inputmode="decimal" step="0.001" data-s="price" data-i="${i}" value="${esc(st.price)}" class="${hl("price")}"></label>
         <label class="field" for="to${i}">Total $<input id="to${i}" type="number" inputmode="decimal" step="0.01" data-s="total" data-i="${i}" value="${esc(st.total)}" class="${hl("total")}" placeholder="auto"></label>
       </div>
-      ${mode !== "off" ? `<input type="file" accept="image/*" id="ph${i}" data-photo="${i}" hidden><button type="button" class="btn" data-act="scan" data-i="${i}" ${st.busy ? "disabled" : ""}>${st.busy ? '<span class="spinner"></span>' : icon("camera", 20)}Scan receipt</button>` : ""}
+      ${mode !== "off" ? `<input type="file" accept="image/*" capture="environment" id="ph${i}" data-photo="${i}" hidden><input type="file" accept="image/*" id="pl${i}" data-photo="${i}" hidden>
+        <div class="row" style="align-items:center"><button type="button" class="btn" data-act="scan" data-i="${i}" ${st.busy ? "disabled" : ""}>${st.busy ? '<span class="spinner"></span>' : icon("camera", 20)}Scan receipt</button><button type="button" class="link" data-act="pickPhoto" data-i="${i}" ${st.busy ? "disabled" : ""}>Choose a photo</button></div>` : ""}
       ${st.note ? `<p class="${st.noteKind === "ok" ? "note-ok" : st.noteKind === "err" ? "note-err" : "note"}" aria-live="polite">${esc(st.note)}</p>` : ""}
       ${st.offerClaude && claudeOk && st.image ? `<button type="button" class="btn dark" data-act="claudeRead" data-i="${i}" ${st.busy || quota === 0 ? "disabled" : ""}>Read it with Claude <span class="small" style="color:var(--readout-soft)">· ${quota === null ? "" : quota + " left today"}</span></button>` : ""}
     </div>`;
@@ -1266,7 +1267,8 @@
       toast(`Stop ${i + 1} deleted.`, "Undo", () => { if (S.form !== form) return; form.stops.splice(Math.min(i, form.stops.length), 0, gone); renderStops(); });
     },
     stopKind: (el) => { const st = S.form.stops[Number(el.dataset.i)]; st.kind = el.dataset.k; if (st.kind === "e85" && !st.station) { st.station = S.settings.primaryE85; st.station_id = S.settings.primaryE85Id; } if (st.kind === "gas" && !st.station) { st.station = S.settings.primaryGas; st.station_id = S.settings.primaryGasId; } renderStops(); },
-    scan: (el) => { const inp = $("#ph" + el.dataset.i); if (inp) inp.click(); },
+    scan: (el) => { const inp = $("#ph" + el.dataset.i); if (inp) inp.click(); },          // opens the camera
+    pickPhoto: (el) => { const inp = $("#pl" + el.dataset.i); if (inp) inp.click(); },     // opens the photo library
     claudeRead: (el) => claudeRead(Number(el.dataset.i)),
     cancelFill: () => { S.form = null; go("history"); },
     askDeleteFill: () => { S.form.confirmDelete = true; render(); },
