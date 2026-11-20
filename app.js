@@ -483,7 +483,14 @@
     catch { st.note = "Your phone couldn't read this receipt."; st.noteKind = "err"; }
     st.busy = false;
     if (ok || mode === "phone") st.image = null;
-    else { st.offerClaude = true; await refreshQuota(); }
+    else {
+      // The phone missed a number: hand the photo to Claude right away while today's and this month's reads last.
+      await refreshQuota();
+      const q = S.quota;
+      const left = q ? Math.min(q.daily_limit - q.used_today, (q.month_cap ?? Infinity) - (q.month_used ?? 0)) : 1;
+      if (left > 0) { renderStops(); updateDateInput(); return claudeRead(i); }
+      st.offerClaude = true;
+    }
     renderStops(); updateDateInput();
   }
   async function claudeRead(i) {
@@ -691,7 +698,7 @@
           <label class="field" for="c-om">Every (miles)<input id="c-om" type="number" inputmode="numeric" data-c="oilMiles" value="${esc(f.oilMiles)}"></label>
           <label class="field" for="c-mo">Or every (months)<input id="c-mo" type="number" inputmode="numeric" data-c="oilMonths" value="${esc(f.oilMonths)}"></label></div></section>
         <section class="card"><h2>Receipt photos</h2>
-          ${[["phone_first", "Phone first, Claude if needed", "Free on your phone. Claude only when the phone misses a number."], ["claude", "Always Claude", "Most accurate. Up to " + (S.quota ? S.quota.daily_limit : 6) + " reads a day."], ["phone", "Phone only", "Nothing leaves your phone."], ["off", "Off", "Type the numbers in."]]
+          ${[["phone_first", "Phone first, Claude if needed", "Free on your phone. Claude reads it automatically when the phone misses a number."], ["claude", "Always Claude", "Most accurate. Up to " + (S.quota ? S.quota.daily_limit : 6) + " reads a day."], ["phone", "Phone only", "Nothing leaves your phone."], ["off", "Off", "Type the numbers in."]]
             .map(([v, t, d]) => `<label class="check" for="rm-${v}" style="align-items:flex-start"><input id="rm-${v}" type="radio" name="rm" data-c="receiptMode" value="${v}" ${f.receiptMode === v ? "checked" : ""}><span class="stack"><b>${t}</b><span class="small muted">${d}</span></span></label>`).join("")}
         </section>
         <section class="card"><h2>Community</h2>

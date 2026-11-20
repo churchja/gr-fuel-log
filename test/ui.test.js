@@ -156,11 +156,13 @@ const W = path.resolve(__dirname, "..");
   // Stop 2: phone OCR misses gallons -> offer Claude -> Claude fills it
   await page.evaluate(() => { window.__ocrText = "COSTCO\nPREMIUM\nTHANK YOU"; });
   await page.setInputFiles("#pl1", img);   // a photo picked from the library
-  await page.waitForSelector("[data-act=claudeRead]");
-  log("5 stop 2 offer:", await page.locator("[data-act=claudeRead]").innerText());
-  await shot("log");
-  await page.click("[data-act=claudeRead]");
+  // The phone missed the gallons, so Claude reads it on its own: no button to press.
   await page.waitForFunction(() => document.querySelector("#ga1") && document.querySelector("#ga1").value === "5.1");
+  const note1 = await page.locator("#stops .stop").nth(1).locator(".note-ok").innerText();
+  log("5 stop 2 read by Claude automatically:", note1, "| button left:", await page.locator("[data-act=claudeRead]").count(),
+    "| invokes:", await page.evaluate(() => (window.__calls || []).filter((c) => c.fn === "read-receipt" || c.invoke === "read-receipt").length));
+  if (!/Read by Claude/.test(note1) || await page.locator("[data-act=claudeRead]").count()) throw new Error("Claude didn't read the receipt automatically");
+  await shot("log");
   log("6 after Claude read:", JSON.stringify(await page.evaluate(() => ({ st: document.querySelector("#st1").textContent.trim(), g: document.querySelector("#ga1").value, grade: document.querySelector("#g1").value, sum: document.querySelector("#f-summary").textContent }))));
   await page.fill("#f-after", "40");
   await page.click("button:has-text('Save fill')");
@@ -288,5 +290,15 @@ const W = path.resolve(__dirname, "..");
   log("14b matched:", st.primaryE85, st.primaryE85Id, "|", st.primaryGas, st.primaryGasId, "| banner left:", left, "| pump button:", btn);
   if (st.primaryE85Id !== "afdc-th83" || st.primaryGasId !== "afdc-th83" || left !== 0 || !/Thorntons/.test(btn)) throw new Error("match not saved or shown");
   await page.evaluate(() => sessionStorage.removeItem("__preset"));
+  // With today's Claude reads used up, a phone miss doesn't call Claude; it says so and leaves the numbers to type.
+  await page.evaluate(() => { window.__quota = { used_today: 6, daily_limit: 6, month_used: 40, month_cap: 1000 }; window.__ocrText = "COSTCO\nPREMIUM\nTHANK YOU"; location.hash = "log"; });
+  await page.waitForSelector("text=Log a fill");
+  const before = await page.evaluate(() => window.__calls.filter((c) => c.fn === "read-receipt").length);
+  await page.setInputFiles("#pl0", W + "/icons/icon-192.png");
+  await page.waitForSelector("#stops .note-err"); await page.waitForTimeout(300);
+  const after = await page.evaluate(() => window.__calls.filter((c) => c.fn === "read-receipt").length);
+  const btnState = await page.locator("[data-act=claudeRead]").evaluateAll((b) => b.map((x) => x.disabled + " " + x.textContent.trim()));
+  log("15 out of Claude reads:", await page.locator("#stops .note-err").first().innerText(), "| Claude calls:", after - before, "| button:", JSON.stringify(btnState));
+  if (after !== before) throw new Error("Claude was called with no reads left");
   await browser.close();
 })();

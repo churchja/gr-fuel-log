@@ -71,7 +71,7 @@
       }
       if (name === "delete_station") { window.__known = window.__known.filter((k) => k.id !== args.p_id); return { data: { deleted: true, fills_unlinked: 1 } }; }
       if (name === "station_detail") return { data: { card: window.__known.find((k) => k.id === args.p_id), prices: [{ fuel: "E85", month: "2026-09", price: 2.39, n: 4 }, { fuel: "E85", month: "2026-10", price: 2.45, n: 6 }, { fuel: "E85", month: "2026-11", price: 2.49, n: 3 }, { fuel: "93 octane", month: "2026-10", price: 3.29, n: 5 }, { fuel: "93 octane", month: "2026-11", price: 3.25, n: 2 }] } };
-      if (name === "receipt_quota") return { data: { used_today: 1, daily_limit: 6, month_used: 38, month_cap: 1000 } };
+      if (name === "receipt_quota") return { data: window.__quota || { used_today: 1, daily_limit: 6, month_used: 38, month_cap: 1000 } };
       if (name === "community_stats") return { data: { owners: 12, stations: [{ name: "MotoMart E Lloyd", value: 66, sd: 2, n: 31, owners: 8, switch_date: "2026-10-08", switch_from: 78, switch_to: 66 }], blends: [{ label: "E35 to E44", cpm: 0.136, mpg: 24.3, n: 41 }], grades: [{ grade: "93", cpm: 0.137, n: 30 }, { grade: "87", cpm: 0.129, n: 12 }], on_target: 78 } };
       if (name === "admin_overview") return { data: { config: { pace_per_hour: 5, pace_per_day: 15, hold_all: false, claude_daily_per_user: 6, claude_monthly_cap: 1000, admin_email: "jason.a.church@shadyacres.my", mail_from: "GR Fuel Log <fuel@shadyacres.my>" },
         held: [{ id: "u-held", handle: "mr_grc", email: "m@mailinator.com", created_at: "2026-11-06T20:14:00Z", reason: "throwaway email address" }], flagged: [],
