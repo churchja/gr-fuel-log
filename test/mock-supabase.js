@@ -59,6 +59,16 @@
       if (name === "stations_known") return { data: window.__known };
       if (name === "stations_lookup") return { data: [{ id: "afdc-th83", source: "afdc", name: "Thorntons · 701 S Green River Rd", city: "Evansville", state: "IN", distance_m: 7400, standardized: true, known: false, e85_listed: true, listed_by: "both" },
         { id: "e85p-cm", source: "e85prices", name: "CountryMark · 5015 N Saint Joseph Ave", city: "Evansville", state: "IN", distance_m: 6500, standardized: true, known: false, e85_listed: true, listed_by: "e85prices", e85prices: { listed: true, price: 2.39, price_date: "2026-11-02" } }] };
+      if (name === "stations_search") {
+        const q = String(args.p_q || "").toLowerCase();
+        if (/dallas/.test(q)) return { data: { place: { kind: "town", label: "Dallas, TX", lat: 32.79, lon: -96.8 }, others: ["Dallas, GA"], name_first: false, near: [
+          { id: "afdc-qt-dal", source: "afdc", name: "QuikTrip · 1449 Inwood Rd", city: "Dallas", state: "TX", distance_m: 950000, place_m: 6401, standardized: true, known: false, e85_listed: true, listed_by: "afdc" },
+          { id: "e85p-rt-dal", source: "e85prices", name: "RaceTrac · 3005 W Northwest Hwy", city: "Dallas", state: "TX", distance_m: 951000, place_m: 9100, standardized: true, known: false, e85_listed: true, listed_by: "e85prices" }], matches: [] } };
+        const { data } = await rpcRun("stations_lookup", args);
+        return { data: { place: null, others: [], name_first: false, near: [], matches: data } };
+      }
+      if (name === "station_summary") return { data: { total: 7056, doe: { ran_at: "2026-11-16T09:17:05Z", listed: null, added: 5, removed: null, total: 4817 },
+        e85prices: { ran_at: "2026-11-23T05:30:03Z", listed: 6316, added: 9, removed: 0, total: 2239, recent_prices: 31 } } };
       if (name === "stations_near" && window.__nearFail) return { data: null, error: { message: "network" } };
       if (name === "stations_near") return { data: [
         { id: "afdc-th84", source: "afdc", name: "Thorntons · 813 N St Joseph Ave", city: "Evansville", state: "IN", distance_m: 2937, standardized: true, known: false, e85_listed: true, listed_by: "both" },

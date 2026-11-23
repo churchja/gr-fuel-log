@@ -47,5 +47,8 @@ Deno.serve(async (req) => {
   }
   const { data: finish, error } = await db.rpc("finish_afdc", { p_started: started });
   if (error) console.error("finish failed", error.message);
+  // A line for the About page: how many stations this week's list added and removed.
+  const log = await db.rpc("log_station_update", { p_source: "afdc", p_started: started, p_listed: rows.length, p_removed: Number(finish?.removed) || 0 });
+  if (log.error) console.error("log failed", log.error.message);
   return new Response(JSON.stringify({ ok: true, listed: rows.length, saved, ...(finish ?? {}) }), { headers: { "Content-Type": "application/json" } });
 });

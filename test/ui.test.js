@@ -47,8 +47,24 @@ const W = path.resolve(__dirname, "..");
   await page.locator("#pickBody").screenshot({ path: `${W}/test/shot-picker-near.png` });
   await page.fill("#pickQ", "morgan");
   log("2n2 filtered:", (await page.locator("#pickBody .card.list").innerText()).replace(/\n+/g, " | "));
-  if (await page.locator("#pickBody .card.list .srow").count() !== 1) throw new Error("search did not filter the closest list");
+  if (await page.locator("#pickBody .card.list").first().locator(".srow").count() !== 1) throw new Error("search did not filter the closest list");
+  // With location on, typing still searches every E85 station: the whole-list results show under the nearby ones
+  await page.waitForSelector("text=Searched all E85 stations");
+  await page.fill("#pickQ", "Dallas"); await page.waitForSelector("text=Near Dallas, TX");
+  log("2n3 near mode, Dallas:", (await page.locator("#pickBody").innerText()).replace(/\n+/g, " | ").slice(0, 220));
   await page.fill("#pickQ", "");
+  // Searching by place covers every E85 station, not just the ones members use: "Dallas, Texas" lists the stations
+  // nearest Dallas with their distance from it, and offers the other Dallases
+  await page.click("[data-act=pickerNearOff]");
+  await page.fill("#pickQ", "Dallas, Texas"); await page.waitForSelector("text=Near Dallas, TX");
+  const dal = (await page.locator("#pickBody").innerText()).replace(/\n+/g, " | ");
+  log("2s place search:", dal);
+  const sArgs = await page.evaluate(() => window.__calls.filter((c) => c.rpc === "stations_search").pop().args);
+  if (!/QuikTrip · 1449 Inwood Rd.*4\.0 mi.*RaceTrac/.test(dal) || !/Did you mean \| ?Dallas, GA|Did you mean Dallas, GA/.test(dal) || sArgs.p_q !== "Dallas, Texas") throw new Error("place search wrong");
+  await page.locator("#pickBody").screenshot({ path: `${W}/test/shot-picker-search.png` });
+  await page.fill("#pickQ", "");
+  if (await page.locator("text=Near Dallas, TX").count()) throw new Error("search results stayed after clearing the box");
+  await page.click("[data-act=pickerNear]"); await page.waitForSelector("text=Closest E85 stations to you");
   // A failed lookup says so and offers Try again; it never claims there are no stations nearby
   await page.evaluate(() => { window.__nearFail = true; });
   await page.click(".near-btn"); await page.waitForSelector("[data-act=pickerNear]");
@@ -86,7 +102,7 @@ const W = path.resolve(__dirname, "..");
   await page.click("#c-gas"); await page.waitForSelector("text=Add a station that isn't listed");
   await page.click("text=Add a station that isn't listed"); await page.waitForSelector("text=Is it one of these?");
   await shot("picker-add");
-  await page.fill("#pickLookup", "thorntons"); await page.waitForSelector("text=Matches");
+  await page.fill("#pickLookup", "thorntons"); await page.waitForSelector("text=Matching stations");
   const found = (await page.locator("#pickBody .card.list").innerText()).replace(/\n+/g, " | ");
   log("2b2 search:", found);
   if (!/on the DOE and E85prices\.com lists/.test(found) || !/on the E85prices\.com list · E85 \$2\.39 on Nov 2 \(E85prices\.com\)/.test(found)) throw new Error("E85prices.com listing not shown in search");
@@ -214,7 +230,11 @@ const W = path.resolve(__dirname, "..");
   }
   if (!/About and disclaimer/.test(await page.locator("#app").innerText())) throw new Error("About and disclaimer missing from More");
   await page.click("text=About and disclaimer"); await page.waitForSelector("h2:has-text('Disclaimer')");
-  log("8e about:", (await page.locator("#app").innerText()).replace(/\n+/g, " | "));
+  await page.waitForSelector("text=E85 stations as of");
+  const about = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
+  log("8e about:", about);
+  if (!/Version 28/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
+  await shot("about");
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");
   log("10 remove primary:", (await page.locator("#c-gas").innerText()).trim(), "| bar:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
@@ -282,7 +302,7 @@ const W = path.resolve(__dirname, "..");
   log("14 unmatched banner:", banner.join(" | "));
   if (banner.length !== 1 || !/Match Casey's/.test(banner[0])) throw new Error("match banner wrong");
   await shot("match-banner");
-  await page.click("[data-act=matchPrimary]"); await page.waitForSelector("text=Matches");
+  await page.click("[data-act=matchPrimary]"); await page.waitForSelector("text=Matching stations");
   log("14a picker search:", await page.inputValue("#pickLookup"), "| brand:", await page.inputValue("#pickBrand"));
   await page.click('#pickBody .srow:has-text("Thorntons")'); await page.waitForSelector("#toast:not([hidden])"); await page.waitForTimeout(300);
   const st = await page.evaluate(() => window.__db.profiles[0].settings);

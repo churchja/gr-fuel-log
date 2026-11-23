@@ -10,6 +10,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+  const APP_VERSION = 28, APP_DATE = "2026-11-23"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -83,6 +84,7 @@
     S.view = v; S.picker = null;
     if (v === "log" && !S.form) S.form = newForm();
     if (v === "community" && !S.community) loadCommunity();
+    if (v === "about") loadSummary();
     if (v === "admin") loadAdmin();
     if (v === "car") S.carForm = null;
     if (v === "station" && !S.stationDetail) loadStation();
@@ -637,10 +639,31 @@
     S.oilForm = null; S.flash = "Oil change saved."; await reloadFills(); render();
   }
 
+  // The station lists update every week; the About page shows the latest of each.
+  async function loadSummary() {
+    const { data } = await sb.rpc("station_summary");
+    S.summary = data || null; if (S.view === "about") render();
+  }
+  const n0 = (v) => Number(v || 0).toLocaleString("en-US");
+  const fmtRun = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+  function updateLine(name, u) {
+    if (!u) return "";
+    const change = [u.added !== null && u.added !== undefined ? `${n0(u.added)} added` : "", u.removed !== null && u.removed !== undefined ? `${n0(u.removed)} removed` : ""].filter(Boolean).join(", ");
+    const prices = u.recent_prices !== null && u.recent_prices !== undefined ? `, ${n0(u.recent_prices)} with a price reported in the past week` : "";
+    const count = u.listed && u.listed !== u.total && name !== "U.S. DOE" ? `${n0(u.listed)} stations listed, ${n0(u.total)} of them not on the DOE list` : `${n0(u.total)} stations`;
+    return `<li><b>${name}</b>, updated ${fmtRun(u.ran_at)}: ${count}${change ? ` (${change})` : ""}${prices}.</li>`;
+  }
   function vAbout() {
+    const m = S.summary;
+    const stations = m ? `<section class="card"><h2>E85 stations</h2><p><b>${n0(m.total)}</b> E85 stations as of ${fmtRun((m.e85prices && m.doe ? [m.e85prices.ran_at, m.doe.ran_at].sort().pop() : (m.e85prices || m.doe || {}).ran_at) || Date.now())}.</p>
+        <ul class="small">${updateLine("U.S. DOE", m.doe)}${updateLine("E85prices.com", m.e85prices)}</ul>
+        <p class="small muted">Both lists update automatically every week. A station on both lists counts once.</p></section>`
+      : `<section class="card"><h2>E85 stations</h2><p class="small muted"><span class="spinner"></span> Loading…</p></section>`;
     return `<h1>About and disclaimer</h1>
       <section class="card"><h2>About</h2><p>GR Fuel Log is a free app for GR Corolla owners running E85: blend math at the pump, a fill log that learns your E85, and numbers from other owners.</p>
-        <p class="small muted">E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p></section>
+        <p><b>Version ${APP_VERSION}</b> <span class="muted">· updated ${fmtDate(APP_DATE)}</span></p>
+        <p class="small muted">E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. ZIP code and town locations: <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0).</p></section>
+      ${stations}
       <section class="card"><h2>Disclaimer</h2><p>Not affiliated with Toyota, the U.S. DOE or the Renewable Fuels Association. Blend plans are estimates, so check your flex-fuel sensor after every fill. Station info can be out of date. Use at your own risk.</p></section>`;
   }
   function vLearned() {
@@ -823,17 +846,40 @@
     const e85 = c.e85 ? `<span class="chip target">E${Math.round(c.e85.value)}</span>` : listed;
     return `<button type="button" class="srow" data-act="${act}" data-id="${esc(c.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(c.name)}</b>${sub ? `<span class="small muted">${esc(sub)}</span>` : ""}${e85 || (c.fuels || []).length ? `<span class="badges">${e85}${fuelChips(c)}</span>` : ""}</span><span class="dist">${distTxt(c.distance_m)}</span></button>`;
   }
-  function candRow(x) {
+  function candRow(x) { return candRowAt(x, x.distance_m); }
+  function candRowAt(x, dist) {
     const where = [[x.city, x.state].filter(Boolean).join(", "), x.known ? "members use it" : x.e85_listed ? listedTxt(x.listed_by) : "on the map", e85pPrice(x), x.standardized ? "" : "you'll confirm the name"].filter(Boolean).join(" · ");
-    return `<button type="button" class="srow" data-act="pickerChoose" data-id="${esc(x.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(x.name)}</b><span class="small muted">${esc(where)}</span></span><span class="dist">${distTxt(x.distance_m)}</span></button>`;
+    return `<button type="button" class="srow" data-act="pickerChoose" data-id="${esc(x.id)}"><span class="stack" style="gap:4px;min-width:0"><b>${esc(x.name)}</b><span class="small muted">${esc(where)}</span></span><span class="dist">${distTxt(dist)}</span></button>`;
   }
-  async function lookup(p) {
-    const q = String(p.lq || "").trim();
-    if (q.length < 3) { p.lookup = null; return renderPicker(); }
-    p.lookBusy = true; renderPicker();
-    const { data } = await sb.rpc("stations_lookup", { p_q: q, p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
-    if (S.picker !== p || String(p.lq || "").trim() !== q) return;
-    p.lookBusy = false; p.lookup = data || []; renderPicker();
+  // Searches the whole station list (DOE and E85prices.com) like a map search: a ZIP, a town, a state, a brand or
+  // street, or a mix. The server works out the place; results come back as stations near it and stations by name.
+  async function searchStations(p, q) {
+    q = String(q || "").trim();
+    clearTimeout(p.st);
+    if (q.length < 3) { p.search = null; return renderPicker(); }
+    if (p.search && p.search.q === q && !p.search.error) return renderPicker();
+    p.search = { q, busy: true, data: p.search && p.search.data };
+    renderPicker();
+    const { data, error } = await sb.rpc("stations_search", { p_q: q, p_lat: S.loc ? S.loc.lat : null, p_lon: S.loc ? S.loc.lon : null });
+    if (S.picker !== p || !p.search || p.search.q !== q) return;
+    p.search = { q, busy: false, error: !!error, data: error ? null : data };
+    renderPicker();
+  }
+  const searchHits = (p) => (p.search && p.search.data ? [...(p.search.data.near || []), ...(p.search.data.matches || [])] : []);
+  function searchBody(p, skip = []) {
+    const r = p.search;
+    if (!r) return "";
+    if (r.busy && !r.data) return `<p class="small muted"><span class="spinner"></span> Searching all E85 stations…</p>`;
+    if (r.error) return `<p class="note-err" role="alert">Couldn't search right now. Check your connection and try again.</p>`;
+    const d = r.data || {}, place = d.place, spin = r.busy ? ` <span class="spinner"></span>` : "";
+    const near = (d.near || []).filter((x) => !skip.includes(x.id)), matches = (d.matches || []).filter((x) => !skip.includes(x.id));
+    const others = (d.others || []).length ? `<p class="small muted">Did you mean ${(d.others).map((o) => `<button type="button" class="link" data-act="searchPlace" data-q="${esc(o)}">${esc(o)}</button>`).join(", ")}?</p>` : "";
+    const far = near.length && near.every((x) => x.place_m > 80467);
+    const nearHtml = place && near.length ? `<h2>${far ? "Closest" : "Near"} ${esc(place.label)}</h2>${far ? `<p class="small muted">Nothing within 50 miles. These are the closest.</p>` : ""}<div class="card list">${near.map((x) => candRowAt(x, x.place_m)).join("")}</div>` : "";
+    const matchHtml = matches.length ? `<h2>${place && place.kind === "state" ? `E85 stations in ${esc(place.label)}` : place && !d.name_first ? "Other matches" : "Matching stations"}</h2><div class="card list">${matches.map(candRow).join("")}</div>` : "";
+    if (!nearHtml && !matchHtml) return `<p class="muted">No stations match “${esc(r.q)}”.${spin} Try a town, ZIP code, brand or street.</p>${others}`;
+    const head = `<p class="small muted">Searched all E85 stations from the DOE and E85prices.com.${spin}</p>`;
+    return head + (d.name_first ? matchHtml + others + nearHtml : nearHtml + others + matchHtml);
   }
   function matchKnown(text) {
     const words = C.stationKey(text).split(" ").filter((w) => w.length > 2);
@@ -847,6 +893,7 @@
     if (opts.search) { S.picker.step = "add"; S.picker.lq = opts.search; S.picker.form = { id: null, brand: C.cleanStation(opts.search, "").brand, street: "" }; }
     try { history.pushState({ picker: true }, ""); } catch { /* ignore */ }
     render(); window.scrollTo(0, 0);
+    if (opts.search) searchStations(S.picker, opts.search);
     refreshKnown(S.picker, S.geoPerm === "granted" && S.picker.locState !== "ok");
   }
   async function refreshKnown(p, withLocation) {
@@ -893,7 +940,7 @@
   }
   function pickerChoose(id) {
     const p = S.picker;
-    const c = [...(p.step === "list" && !p.nearOn ? S.known || [] : []), ...(p.step === "list" && p.nearOn ? p.near || [] : []), ...(p.lookup || []), ...(p.cands || []), ...(S.known || [])].find((x) => x.id === id);
+    const c = [...(p.step === "list" && !p.nearOn ? S.known || [] : []), ...(p.step === "list" && p.nearOn ? p.near || [] : []), ...searchHits(p), ...(p.cands || []), ...(S.known || [])].find((x) => x.id === id);
     if (!c) return;
     if (!c.standardized) { p.from = p.step; p.step = "confirm"; p.error = ""; p.form = { id: c.id, brand: c.brand || "", street: c.street || "" }; render(); return; }
     applyStation(c.name, c.id);
@@ -902,10 +949,10 @@
     const p = S.picker;
     const what = p.kind === "e85" ? "E85 station" : p.kind === "gas" ? "Gas station" : "Station";
     return `<header class="head"><div class="stack"><span class="eyebrow">${p.step === "list" ? "Choose a station" : p.step === "confirm" ? "Confirm the name" : "Add a station"}</span><h1>${what}</h1></div><button type="button" class="btn" data-act="pickerClose">Close</button></header>
-      ${p.step === "list" ? `<label class="field" for="pickQ">Search stations<input id="pickQ" type="search" autocomplete="off" value="${esc(p.q)}" placeholder="Brand, street or city"></label>` : ""}
-      ${p.step === "add" ? `<label class="field" for="pickLookup">Search the E85 station list and map<input id="pickLookup" type="search" autocomplete="off" value="${esc(p.lq || "")}" placeholder="Brand, street, city or ZIP"></label>` : ""}
+      ${p.step === "list" ? `<label class="field" for="pickQ">Search stations<input id="pickQ" type="search" autocomplete="off" value="${esc(p.q)}" placeholder="Town, ZIP, brand or street"></label>` : ""}
+      ${p.step === "add" ? `<label class="field" for="pickLookup">Search every E85 station<input id="pickLookup" type="search" autocomplete="off" value="${esc(p.lq || "")}" placeholder="Town, ZIP, brand or street"></label>` : ""}
       <div id="pickBody" class="gap">${pickerBody()}</div>
-      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>`;
+      <p class="small muted">Your location only sorts stations and spots duplicates. It's never saved with a fill. E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Town and ZIP locations: <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a>.</p>`;
   }
   function renderPicker() { if (!S.picker) return; const el = $("#pickBody"); if (el) el.innerHTML = pickerBody(); else render(); }
   function pickerBody() {
@@ -923,10 +970,13 @@
     const foot = nHidden ? `<button type="button" class="link" data-act="pickerShowHidden">Show ${nHidden} hidden station${nHidden === 1 ? "" : "s"}</button>`
       : p.showHidden && hidden.length ? `<button type="button" class="link" data-act="pickerShowHidden">Hide them again</button>` : "";
     const tip = p.editing ? `<p class="small muted">Delete removes a station you added that no other member has used. Hide takes a station out of your app but other members still see it. Either way it comes off your pump plan and the fill you're logging, so you'll choose a station again. Tip: you can also swipe a station left.</p>` : "";
+    const searching = String(p.q || "").trim().length >= 3;
     const rows = list.length ? `${head}${tip}<div class="card list">${list.map((c) => pickRow(c, p, hidden)).join("")}</div>${foot}`
       : p.busy ? `<p class="small muted"><span class="spinner"></span> Loading stations…</p>`
-      : `<p class="muted">${q ? "No station matches. Add it below." : "No stations yet. Add the one you're using."}</p>${foot}`;
-    return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
+      : searching ? foot
+      : `<p class="muted">${q ? "No station you use matches. Type 3 or more letters to search every E85 station." : "No stations yet. Search by town, ZIP or brand, or add the one you're using."}</p>${foot}`;
+    const all = searching ? searchBody(p, list.map((c) => c.id)) : "";
+    return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}${all}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
   }
   // The closest stations to where you are now, nearest first, filtered by whatever is typed in the search box.
   // Stations waiting out their Undo window after a delete stay out of it.
@@ -937,9 +987,11 @@
     if (p.nearErr) return `${head}<p class="note-err" role="alert">${esc(p.nearErr)}</p><button type="button" class="btn full" data-act="pickerNear">Try again</button>`;
     const near = p.near.filter((c) => !pendingDeletes.has(c.id));
     const list = near.filter((c) => !q || C.stationKey([c.name, c.brand, c.street, c.city, c.state].join(" ")).includes(q));
-    if (!near.length) return `${head}<p class="muted">No ${what} on file within 50 miles of you. Add the one you're using below.</p>`;
-    if (!list.length) return `${head}<p class="muted">None of the ${near.length} closest ${what} match "${esc(p.q)}". Check My stations, or add it below.</p>`;
-    return `${head}<div class="card list">${list.map(candRow).join("")}</div>`;
+    // Typing searches every E85 station too, so "Dallas" works here just like in My stations.
+    const all = String(p.q || "").trim().length >= 3 ? searchBody(p, list.map((c) => c.id)) : "";
+    if (!near.length) return `${head}<p class="muted">No ${what} on file within 50 miles of you. Search above, or add the one you're using below.</p>${all}`;
+    if (!list.length) return `${head}<p class="muted">None of the ${near.length} closest ${what} match "${esc(p.q)}".</p>${all}`;
+    return `${head}<div class="card list">${list.map(candRow).join("")}</div>${all}`;
   }
   // A location problem goes back to My stations with the message on top, so search works and one tap tries again.
   async function findNear(p) {
@@ -1033,9 +1085,7 @@
   function addBody(p) {
     let top;
     if (String(p.lq || "").trim().length >= 3) {
-      const l = p.lookup || [];
-      top = p.lookBusy && !p.lookup ? `<p class="small muted"><span class="spinner"></span> Searching…</p>`
-        : l.length ? `<h2>Matches</h2><div class="card list">${l.map(candRow).join("")}</div>` : `<p class="muted">Nothing matches. Add it below.</p>`;
+      top = searchBody(p) || `<p class="small muted"><span class="spinner"></span> Searching all E85 stations…</p>`;
     } else if (p.locState !== "ok") {
       top = p.locBusy ? `<p class="small muted"><span class="spinner"></span> Finding your location…</p>`
         : `<p>Search above, or if you're at the station, use your location to see what's on file right here.</p><button type="button" class="btn dark full" data-act="pickerHere">I'm at the station · use my location</button>${p.locState === "denied" ? `<p class="small muted">Location is off for this site. You can still add the station without it.</p>` : p.locState === "error" ? `<p class="small muted">Couldn't get your location. You can still add the station without it.</p>` : ""}`;
@@ -1243,7 +1293,6 @@
     matchPrimary: (el) => {
       const u = unmatchedPrimaries(S.settings)[Number(el.dataset.i)]; if (!u) return;
       openPicker({ type: "primaryNow", keys: u.keys }, u.keys.includes("primaryE85") ? "e85" : "gas", { search: u.name });
-      lookup(S.picker);
     },
     pickBrandFix: (el) => { if (S.picker && S.picker.form) { S.picker.form.brand = el.dataset.b; renderPicker(); } },
     stBrandFix: (el) => { if (S.stEdit) { S.stEdit.brand = el.dataset.b; render(); } },
@@ -1252,7 +1301,8 @@
     pickerNear: () => findNear(S.picker),
     pickerNearOff: () => { if (S.picker) { S.picker.nearOn = false; S.picker.nearErr = ""; S.picker.error = ""; renderPicker(); } },
     pickerChoose: (el) => pickerChoose(el.dataset.id),
-    pickerAdd: () => { const p = S.picker; p.step = "add"; p.error = ""; p.form = null; p.swiped = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
+    searchPlace: (el) => { const p = S.picker; if (!p) return; const q = el.dataset.q; if (p.step === "add") p.lq = q; else p.q = q; render(); searchStations(p, q); },
+    pickerAdd: () => { const p = S.picker; p.step = "add"; if (!p.lq && String(p.q || "").trim().length >= 3) p.lq = p.q.trim(); p.error = ""; p.form = null; p.swiped = null; render(); if (p.locState === "ok" || S.geoPerm === "granted") findCandidates(p); },
     pickerHere: () => findCandidates(S.picker),
     pickerBack: () => { const p = S.picker; p.step = p.step === "confirm" && p.from === "add" ? "add" : "list"; p.form = null; p.error = ""; render(); },
     openStation: (el) => openStation(el.dataset.id),
@@ -1318,9 +1368,9 @@
   document.addEventListener("input", (e) => {
     const el = e.target;
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }
-    if (el.id === "pickQ" && S.picker) { S.picker.q = el.value; renderPicker(); return; }
+    if (el.id === "pickQ" && S.picker) { const p = S.picker; p.q = el.value; clearTimeout(p.st); if (p.q.trim().length < 3) p.search = null; renderPicker(); p.st = setTimeout(() => searchStations(p, p.q), 350); return; }
     if (el.dataset.se && S.stEdit) { S.stEdit[el.dataset.se] = el.value; const h = $("#stHints"); if (h) h.innerHTML = nameHints(S.stEdit.brand, S.stEdit.street, "stBrandFix"); return; }
-    if (el.id === "pickLookup" && S.picker) { const p = S.picker; p.lq = el.value; clearTimeout(p.lt); p.lt = setTimeout(() => lookup(p), 300); return; }
+    if (el.id === "pickLookup" && S.picker) { const p = S.picker; p.lq = el.value; clearTimeout(p.st); if (p.lq.trim().length < 3) p.search = null; renderPicker(); p.st = setTimeout(() => searchStations(p, p.lq), 350); return; }
     if (el.dataset.pk && S.picker && S.picker.form) {
       const f = S.picker.form; f[el.dataset.pk] = el.value;
       const pv = $("#pickPreview"), pl = $("#pickPlace"), h = $("#pickHints");

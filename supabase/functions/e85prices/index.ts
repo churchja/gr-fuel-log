@@ -35,5 +35,8 @@ Deno.serve(async (req) => {
   }
   const { data: linked, error } = await db.rpc("link_e85p", { p_started: started });
   if (error) console.error("link failed", error.message);
+  // A line for the About page: how many stations this week's list added and removed.
+  const log = await db.rpc("log_station_update", { p_source: "e85prices", p_started: started, p_listed: rows.length, p_removed: Number(linked?.removed) || 0 });
+  if (log.error) console.error("log failed", log.error.message);
   return reply({ ok: true, listed: rows.length, saved, linked: linked ?? null, link_error: error?.message ?? null });
 });
