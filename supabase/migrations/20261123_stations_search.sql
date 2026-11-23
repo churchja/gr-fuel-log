@@ -19,6 +19,7 @@ $$;
 
 -- One search box for the whole station list: a ZIP, a town ("Dallas", "Dallas, Texas", "Dallas TX"), a state,
 -- a brand, name or street ("Casey's", "Kroger Eldorado"), or a mix ("Shell Dallas", "Casey's 47715").
+-- Only stations on the DOE or E85prices.com lists, or ones members use or added: plain map entries never show.
 -- Returns the place it understood, stations nearest that place, and stations whose name or address has every word.
 create or replace function public.stations_search(p_q text, p_lat double precision default null, p_lon double precision default null)
 returns json language plpgsql stable security definer set search_path to 'public' as $$
@@ -102,7 +103,7 @@ begin
       select s.id, public.dist_m(pl_lat, pl_lon, s.lat, s.lon) as pd
       from public.stations s
       where s.merged_into is null and s.lat is not null
-        and (s.source = 'afdc' or (s.source = 'e85prices' and public.e85p_on()) or (s.source = 'osm' and s.osm_named) or public.station_visible(s.id))
+        and (s.source = 'afdc' or (s.source = 'e85prices' and public.e85p_on()) or public.station_visible(s.id))
         and (select coalesce(bool_and(public.search_key(concat_ws(' ', s.std_brand, s.brand, s.name, s.std_street, s.street)) like '%' || x || '%'), true) from unnest(rest) x)
     ), pick as (
       (select id, pd from c where pd <= radius order by pd limit 25)
@@ -123,7 +124,7 @@ begin
       select s.id, public.dist_m(p_lat, p_lon, s.lat, s.lon) as d
       from public.stations s
       where s.merged_into is null and not (s.id = any (near_ids))
-        and (s.source = 'afdc' or (s.source = 'e85prices' and public.e85p_on()) or (s.source = 'osm' and s.osm_named) or public.station_visible(s.id))
+        and (s.source = 'afdc' or (s.source = 'e85prices' and public.e85p_on()) or public.station_visible(s.id))
         and (st is null or upper(s.state) = st)
         and (select coalesce(bool_and(' ' || public.search_key(concat_ws(' ', s.std_brand, s.brand, s.name, s.std_street, s.street, s.city, s.postcode)) || ' ' like '%' || x || '%'), true) from unnest(words) x)
       order by d nulls last, (s.source in ('afdc', 'e85prices')) desc
