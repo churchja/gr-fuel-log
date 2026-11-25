@@ -21,9 +21,12 @@ create table if not exists public.partner_access (
 alter table public.partner_access enable row level security;
 revoke all on public.partner_access from anon, authenticated;
 grant select on public.partner_access to authenticated;
-drop policy if exists partner_access_read on public.partner_access;
-create policy partner_access_read on public.partner_access for select to authenticated
-  using (user_id = (select auth.uid()) or public.is_admin());
+do $$ begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'partner_access' and policyname = 'partner_access_read') then
+    create policy partner_access_read on public.partner_access for select to authenticated
+      using (user_id = (select auth.uid()) or public.is_admin());
+  end if;
+end $$;
 
 -- Called when someone signs in to a partner version. The first call records the request and emails the admin.
 -- Returns 'approved', 'pending' or 'rejected'. The admin's own account is let straight in.

@@ -1,0 +1,14 @@
+{
+  "name": "LIMIT+1 Flex Fuel",
+  "short_name": "LIMIT+1 Fuel",
+  "description": "E85 blend math at the pump, a fill log that learns your E85, and service reminders. A concept by Shady Acres LLC.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

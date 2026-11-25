@@ -3,7 +3,7 @@
   "use strict";
   const C = window.Calc, V = window.Service, CFG = window.APP_CONFIG;
   const P = window.PARTNER || null; // a branded partner version sets this; plain GR Fuel Log leaves it out
-  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, ...(P ? { storageKey: `sb-${P.storageKey}-auth` } : {}) } });
 
   // ---------- helpers ----------
   const $ = (s) => document.querySelector(s);
@@ -11,10 +11,11 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 29, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 30, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
+  const SK = P ? P.storageKey + "-" : ""; // a partner version keeps its own notes on the phone
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
   const deviceId = (() => { let id = store.get("device-id"); if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set("device-id", id); } return id; })();
   const ICONS = {
@@ -36,16 +37,16 @@
     pump: { dte: "", sensor: "", which: "primary", other: null },
     known: [], picker: null, loc: null, geoPerm: "unknown", stationId: null, stationDetail: null, pumpSuggest: null,
     form: null, oilForm: null, remForm: null, svc: null, carForm: null,
-    signin: { step: "email", email: store.get("last-email") || "", code: "", error: "", busy: false, captcha: "" },
+    signin: { step: "email", email: store.get(SK + "last-email") || "", code: "", error: "", busy: false, captcha: "" },
   };
   const isAdmin = () => !!(S.profile && S.profile.is_admin);
-  const approved = () => !!(S.profile && S.profile.status === "approved");
+  const approved = () => !!(S.profile && S.profile.status === "approved") && (!P || S.partnerStatus === "approved");
   const needsSetup = () => approved() && !S.settings.setupDone && !S.settings.primaryE85 && S.fills.length === 0 && !S.setupDone;
 
   // ---------- data ----------
   async function loadAll() {
     const uid = S.user.id;
-    const [p, f, o, c, ms, st, q, kn] = await Promise.all([
+    const [p, f, o, c, ms, st, q, kn, pa] = await Promise.all([
       sb.from("profiles").select("*").eq("id", uid).single(),
       sb.from("fills").select("*").order("date").order("odometer"),
       sb.from("oil_changes").select("*").order("date"),
@@ -54,7 +55,9 @@
       sb.from("station_estimates").select("*"),
       sb.rpc("receipt_quota"),
       sb.rpc("stations_known", { p_lat: null, p_lon: null }),
+      P ? sb.rpc("partner_request", { p_partner: P.id }) : Promise.resolve({ data: null }),
     ]);
+    if (P) S.partnerStatus = pa.data || "pending";
     S.profile = p.data || null;
     S.settings = C.withDefaults(S.profile && S.profile.settings);
     S.fills = f.data || []; setSvcLog(o.data || []); S.car = c.data || null; S.myStations = ms.data || []; S.stations = st.data || []; S.quota = q.data || null; S.known = kn.data || [];
@@ -107,10 +110,12 @@
     else if (!S.user) html = vSignin();
     else if (!S.profile) html = `<p class="muted">Setting up your account…</p>`;
     else if (S.profile.status !== "approved") html = vPending();
+    else if (P && S.partnerStatus !== "approved") html = vPartnerPending();
     else if (S.picker) html = vPicker();
     else if (needsSetup()) html = vCar(true);
     else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, service: vService, learned: vLearned, car: () => vCar(false), about: vAbout, admin: vAdmin, station: vStation }[S.view])();
-    document.body.classList.toggle("signin", !S.user || (S.profile && S.profile.status !== "approved"));
+    if (P && S.user && approved()) html = brandBar() + html; // the partner's logo on every screen
+    document.body.classList.toggle("signin", !S.user || (S.profile && !approved()));
     app.innerHTML = html;
     $("#tabs").hidden = !(S.user && approved() && !needsSetup() && !S.picker);
     if (!$("#tabs").hidden) renderTabs();
@@ -119,8 +124,47 @@
   }
   function renderTabs() {
     const tab = { pump: "pump", log: "log", history: "history", community: "community", station: "community" }[S.view] || "more";
-    $("#tabs").innerHTML = `<nav aria-label="Sections">${[["pump", "Pump"], ["log", "Log"], ["history", "History"], ["community", "Community"], ["more", "More"]]
-      .map(([id, label]) => `<a href="#${id}" aria-current="${tab === id ? "page" : "false"}">${icon(id === "log" ? "log" : id)}<span>${label}</span></a>`).join("")}</nav>`;
+    const tabs = $("#tabs");
+    if (!tabs.querySelector("nav")) tabs.innerHTML = `${P && P.promo ? `<div class="promo" id="promo"></div>` : ""}<nav aria-label="Sections"></nav>`;
+    tabs.querySelector("nav").innerHTML = [["pump", "Pump"], ["log", "Log"], ["history", "History"], ["community", "Community"], ["more", "More"]]
+      .map(([id, label]) => `<a href="#${id}" aria-current="${tab === id ? "page" : "false"}">${icon(id === "log" ? "log" : id)}<span>${label}</span></a>`).join("");
+    if (P && P.promo) renderPromo();
+  }
+
+  // ---------- partner promo bar ----------
+  // One slim line above the bottom menu that scrolls by itself: the partner's current sale, then products that fit
+  // this owner's car. Each opens the partner's product page. It's only redrawn when the car or the sale changes,
+  // so the scrolling doesn't restart on every screen.
+  function saleOn() {
+    const s = P.promo.sale;
+    return !!s && !(s.ends && Date.parse(s.ends) <= Date.now()) && !(s.until && today() > s.until);
+  }
+  function endsTxt(iso) {
+    const ms = Date.parse(iso) - Date.now();
+    if (!(ms > 0)) return "";
+    const d = Math.floor(ms / 86400000), h = Math.floor(ms / 3600000) % 24, m = Math.floor(ms / 60000) % 60;
+    return `Ends in ${d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${Math.max(1, m)}m`}`;
+  }
+  function promoLinks(focusable) {
+    const model = carModel(), pr = P.promo, out = [], t = focusable ? "" : ` tabindex="-1"`;
+    if (saleOn()) { const s = pr.sale; out.push(`<a href="${esc(s.url)}" target="_blank" rel="noopener"${t}><span class="sale">${esc(s.title)}</span>${s.detail ? `<span>${esc(s.detail)}</span>` : ""}${s.ends ? `<span class="ends">${esc(endsTxt(s.ends))}</span>` : ""}</a>`); }
+    for (const it of pr.items) if (!model || !it.models || it.models.includes(model)) out.push(`<a href="${esc(it.url)}" target="_blank" rel="noopener"${t}>${it.sale ? `<span class="tag">Sale</span>` : ""}<span>${esc(it.name)}</span></a>`);
+    return out.join(`<span class="sep" aria-hidden="true"></span>`) + `<span class="sep" aria-hidden="true"></span>`;
+  }
+  function renderPromo() {
+    const el = $("#promo"); if (!el) return;
+    const key = `${carModel()}|${saleOn()}`;
+    if (el.dataset.key === key) return;
+    el.dataset.key = key;
+    el.setAttribute("aria-label", `${P.name}: offers`);
+    el.innerHTML = `<div class="track"><span class="half">${promoLinks(true)}</span><span class="half" aria-hidden="true">${promoLinks(false)}</span></div>`;
+    const half = el.querySelector(".half");
+    el.style.setProperty("--dur", Math.max(20, Math.round((half ? half.offsetWidth : 1600) / 40)) + "s"); // about 40 pixels a second
+  }
+  if (P && P.promo) {
+    // The countdown ticks once a minute; a touch pauses the scroll for a moment so a link can be tapped.
+    setInterval(() => { const s = P.promo.sale; if (!s || !s.ends) return; document.querySelectorAll("#promo .ends").forEach((e) => { e.textContent = endsTxt(s.ends); }); if (!saleOn()) renderPromo(); }, 60000);
+    document.addEventListener("pointerdown", (e) => { const pr = e.target.closest && e.target.closest("#promo"); if (!pr) return; pr.classList.add("paused"); clearTimeout(renderPromo.t); renderPromo.t = setTimeout(() => pr.classList.remove("paused"), 2500); });
   }
   function banners() {
     const out = [];
@@ -150,6 +194,9 @@
         <button class="btn primary full" type="submit" ${s.busy ? "disabled" : ""}>${s.busy ? '<span class="spinner"></span>' : ""}Sign in</button>
         <div class="row"><button type="button" class="link" data-act="resend">Send a new code</button><span class="grow"></span><button type="button" class="link" data-act="otherEmail">Use another email</button></div>
       </form>`;
+    if (P) return `<div class="stack">${markHtml()}<p class="powered">${esc(P.poweredBy)}</p><p class="soft" style="font-size:17px;color:var(--readout-soft)">${esc(P.tagline)}</p></div>
+      ${form}<p style="color:var(--readout-soft);font-size:14px">No password: you sign in with a code we email you. During the preview, each new account is approved by hand.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>
+      <p class="fine">${esc(P.concept)} ${DISCLAIMER}</p>`;
     return `<div class="stack"><span class="wordmark">GR FUEL LOG</span><p class="soft" style="font-size:17px;color:var(--readout-soft)">Blend math at the pump, a log that learns your E85, and real numbers from other GR Corolla owners.</p></div>
       ${form}<p style="color:var(--readout-soft);font-size:14px">No password. New here? Signing in creates your account.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>
       <p class="fine">${DISCLAIMER}</p>`;
@@ -178,7 +225,7 @@
     const { error } = await sb.auth.signInWithOtp({ email: s.email, options: { shouldCreateUser: true, captchaToken: s.captcha || undefined } });
     s.busy = false; s.captcha = "";
     if (error) { s.error = /rate|seconds/i.test(error.message) ? "Too many codes requested. Wait a minute, then try again." : /captcha/i.test(error.message) ? "The bot check didn't go through. Reload the page and try again." : (error.status || 0) >= 500 ? "The app couldn't send email just now. Try again in a few minutes." : "Couldn't send the code. Check the address and try again."; }
-    else { s.step = "code"; store.set("last-email", s.email); }
+    else { s.step = "code"; store.set(SK + "last-email", s.email); }
     render();
     if (s.step === "code") setTimeout(() => $("#code") && $("#code").focus(), 50);
   }
@@ -189,9 +236,24 @@
     if (error) { s.error = "That code didn't work. Check it, or send a new one."; render(); }
   }
 
+  // The app's name on the welcome screens: GR Fuel Log's wordmark, or the partner's logo and product name.
+  const markHtml = () => (P ? `<div class="brandmark"><img src="${esc(P.logo.dark)}" alt="${esc(P.logo.alt)}" width="157" height="34"><b>${esc(P.product)}</b></div>` : `<span class="wordmark">GR FUEL LOG</span>`);
+  // The slim bar with the partner's logo at the top of every screen.
+  const brandBar = () => `<div class="brandbar"><picture><source srcset="${esc(P.logo.dark)}" media="(prefers-color-scheme: dark)"><img src="${esc(P.logo.light)}" alt="${esc(P.logo.alt)}" width="92" height="20"></picture><span>${esc(P.product)}</span></div>`;
+  // A partner version stays locked until the admin approves this account for it.
+  function vPartnerPending() {
+    const no = S.partnerStatus === "rejected";
+    return `${markHtml()}
+      <div class="card" style="color: var(--ink)">
+        <h1>${no ? "This account isn't approved" : "Waiting for approval"}</h1>
+        <p>${no ? `${esc(P.name)} is in a private preview, and this account wasn't approved for it.` : `${esc(P.name)} is in a private preview. Your request has been sent. You can use the app as soon as it's approved.`}</p>
+        <p class="small muted">Signed in as ${esc(S.user.email)}</p>
+        <div class="row">${no ? "" : `<button class="btn primary" data-act="recheck">Check again</button>`}<button class="btn" data-act="signOut">Sign out</button></div>
+      </div>`;
+  }
   function vPending() {
     const rejected = S.profile.status === "rejected";
-    return `<span class="wordmark">GR FUEL LOG</span>
+    return `${markHtml()}
       <div class="card" style="color: var(--ink)">
         <h1>${rejected ? "This account wasn't approved" : "Waiting for approval"}</h1>
         <p>${rejected ? "Contact the person who shared the app with you if you think this is a mistake." : "New sign-ups are approved automatically most of the time. This one is waiting for the admin to check it. You can close the app and come back later."}</p>
@@ -202,7 +264,7 @@
   // ---------- pump plan ----------
   function vPump() {
     const s = S.settings;
-    return `<header class="head"><div class="stack"><span class="eyebrow">GR Fuel Log</span><h1>Pump plan</h1></div>
+    return `<header class="head"><div class="stack"><span class="eyebrow">${P ? esc(P.name) : "GR Fuel Log"}</span><h1>Pump plan</h1></div>
         <div class="stepper" role="group" aria-label="Target blend"><button type="button" data-act="target" data-d="-1" aria-label="Lower target">−</button><span id="tgt">E${s.target}</span><button type="button" data-act="target" data-d="1" aria-label="Raise target">+</button></div></header>
       <section class="card">
         <div class="grid2">
@@ -226,7 +288,7 @@
   // The app learns from the sensor reading after a fill, once the gauge settles. Ask for it on the pump screen.
   function pendingAfter() {
     const f = S.fills[S.fills.length - 1];
-    if (!f || num(f.sensor_after) !== null || store.get("skip-after") === f.id) return null;
+    if (!f || num(f.sensor_after) !== null || store.get(SK + "skip-after") === f.id) return null;
     return (Date.parse(today()) - Date.parse(f.date)) / 86400000 <= 10 ? f : null;
   }
   function afterAskHtml() {
@@ -606,7 +668,7 @@
       ["service", "Service", next && next.dueMiles !== null ? `Next: ${next.name}. ${dueTxt(next)}` : "Oil changes and scheduled service reminders", next ? svcChip(next) : ""],
       ["learned", "What the app has learned", "E85 strength, your sensor, fuel left, accuracy", ""],
       ["car", "Your car and settings", "Model year, target, tune limit, gas, receipts, sharing", ""],
-      ["about", "About and disclaimer", "What the app is and where its data comes from", ""],
+      P ? ["about", "About and contact", `Contact ${P.logo.alt}, the app's version, where its data comes from`, ""] : ["about", "About and disclaimer", "What the app is and where its data comes from", ""],
     ];
     if (isAdmin()) items.push(["admin", "Admin", "Sign-ups, warnings, receipt budget", ""]);
     return `<div class="stack"><h1>More</h1><p class="muted">Signed in as ${esc(S.profile.handle || S.user.email)}</p></div>
@@ -616,7 +678,7 @@
   // ---------- service ----------
   // Which car this is. GR Fuel Log is for the GR Corolla; a partner version lets the owner choose.
   const carModel = () => S.settings.model || (P && P.models ? "" : "grc");
-  const carName = () => { const c = V.CARS[carModel()]; return c ? c.name : "car"; };
+  const carName = () => { const m = P && P.models ? P.models.find((x) => x.id === carModel()) : null, c = V.CARS[carModel()]; return m ? m.name : c ? c.name : "car"; };
   const odoNow = () => Math.max(0, ...S.fills.map((f) => Number(f.odometer) || 0), ...S.svcLog.map((o) => Number(o.odometer) || 0));
   // Every reminder for this car and where it stands. Until the model year is known, only the oil change shows.
   function serviceState() {
@@ -649,9 +711,10 @@
     const mine = [...new Set([...(S.settings.oilTypes || []), ...S.oil.map((o) => o.oil_type)].filter(Boolean))];
     return { mine: mine.filter((o) => !C.COMMON_OILS.includes(o)), common: C.COMMON_OILS };
   }
+  const factoryFilter = () => (carModel() === "grc" ? C.FACTORY_FILTER : ""); // the only car whose filter part is on file
   function newSvcForm(key) {
     const lastOil = S.oil.slice(-1)[0] || {}, odo = odoNow();
-    return { id: null, item: key, date: today(), odometer: odo ? String(odo) : "", oil: lastOil.oil_type || "", filter: lastOil.filter_type || C.FACTORY_FILTER, notes: "", customOil: false, customFilter: false, error: "", confirmDelete: false };
+    return { id: null, item: key, date: today(), odometer: odo ? String(odo) : "", oil: lastOil.oil_type || "", filter: lastOil.filter_type || factoryFilter(), notes: "", customOil: false, customFilter: false, error: "", confirmDelete: false };
   }
   const logLine = (o, names) => `<button type="button" class="item" data-act="editOil" data-id="${esc(o.id)}"><span class="t">${names ? esc(names[o.item || "oil"] || "Service") : fmtDate(o.date)}</span><span class="r muted">${miles(o.odometer)} mi</span>
     <span class="d">${names ? fmtDate(o.date) + (o.oil_type ? " · " + esc(o.oil_type) : "") : esc((o.item || "oil") === "oil" ? (o.oil_type || "Oil not recorded") + (o.filter_type ? " · " + o.filter_type : "") : o.notes || "Done")}</span><span></span></button>`;
@@ -662,12 +725,13 @@
     const source = s.year && info.car ? `<p class="small muted">${info.checked ? `From Toyota's ${info.year} ${esc(info.name)} maintenance guide, checked ${fmtDate(info.checkedOn)}.`
       : `Toyota's ${info.year} ${esc(info.name)} guide hasn't been checked yet, so this uses the ${info.usedYear} schedule.`} <a href="${esc(info.guide)}" target="_blank" rel="noopener">Open the guide</a></p>`
       : `<div class="banner info"><span class="grow">Add your model year to see the full service schedule for your ${esc(carName())}.</span><a href="#car" class="link">Add it</a></div>`;
+    const carNote = info.car && info.car.note && P ? `<p class="small muted">${esc(info.car.note)}</p>` : "";
     const needTrans = s.year && info.car && !info.trans ? `<div class="banner info"><span class="grow">Choose manual or automatic to see the transmission service.</span><a href="#car" class="link">Choose</a></div>` : "";
     const list = V.sortRows(rows).map((r) => `<button type="button" class="item" data-act="svcOpen" data-k="${r.key}"><span class="t">${esc(r.name)}</span><span class="r">${svcChip(r)}</span>
         <span class="d">${esc(r.level === "due" || r.level === "soon" ? dueTxt(r) + (r.dueMiles !== null ? ` · at ${miles(r.dueMiles)} mi` : "") : dueTxt(r))}${r.practice ? " · owner practice" : ""}</span><span></span></button>`).join("");
     const log = [...S.svcLog].sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.odometer) - Number(a.odometer));
     return `<div class="stack"><h1>Service</h1><p class="muted">Reminders for your ${s.year ? s.year + " " : ""}${esc(carName())}. Tap one to mark it done or change it.</p></div>
-      ${source}${needTrans}
+      ${source}${carNote}${needTrans}
       <section class="card list">${list}</section>
       ${log.length ? `<h2>Done so far</h2><section class="card list">${log.map((o) => logLine(o, names)).join("")}</section>` : ""}`;
   }
@@ -676,7 +740,7 @@
     const f = S.oilForm && S.oilForm.item === r.key ? S.oilForm : (S.oilForm = newSvcForm(r.key));
     const rem = S.remForm && S.remForm.key === r.key ? S.remForm : (S.remForm = { key: r.key, on: r.level !== "off", miles: String(r.miles), months: String(r.months), error: "" });
     const isOil = r.key === "oil", { mine, common } = oilChoices();
-    const filters = [...new Set([C.FACTORY_FILTER, ...(S.settings.filterTypes || []), ...S.oil.map((o) => o.filter_type)].filter(Boolean))];
+    const filters = [...new Set([factoryFilter(), ...(S.settings.filterTypes || []), ...S.oil.map((o) => o.filter_type)].filter(Boolean))];
     const opt = (v, label = v) => `<option value="${esc(v)}" ${f.oil === v ? "selected" : ""}>${esc(label)}</option>`;
     const base = V.items(carModel(), S.settings.year, S.settings.trans).find((x) => x.key === r.key) || V.oilItem(carModel());
     const every = (it) => `every ${miles(it.miles)} miles or ${it.months} months`;
@@ -698,7 +762,7 @@
           <optgroup label="Most used by owners">${common.map((o) => opt(o, o + (o.startsWith("Toyota") ? " (factory fill)" : ""))).join("")}</optgroup>
           <option value="__custom" ${f.customOil ? "selected" : ""}>Add your own oil…</option></select></label>
         ${f.customOil ? `<label class="field" for="o-oil-own">Your oil<input id="o-oil-own" type="text" data-o="oilOwn" placeholder="Brand and viscosity" value="${esc(f.oilOwn || "")}"></label>` : ""}
-        <label class="field" for="o-filter">Filter<select id="o-filter" data-o="filter">${filters.map((x) => `<option value="${esc(x)}" ${f.filter === x ? "selected" : ""}>${esc(x)}${x === C.FACTORY_FILTER ? " (factory)" : ""}</option>`).join("")}<option value="__custom" ${f.customFilter ? "selected" : ""}>Add your own filter…</option></select></label>
+        <label class="field" for="o-filter">Filter<select id="o-filter" data-o="filter">${filters.length ? "" : `<option value="" ${!f.filter && !f.customFilter ? "selected" : ""}>Not recorded</option>`}${filters.map((x) => `<option value="${esc(x)}" ${f.filter === x ? "selected" : ""}>${esc(x)}${x === C.FACTORY_FILTER ? " (factory)" : ""}</option>`).join("")}<option value="__custom" ${f.customFilter ? "selected" : ""}>Add your own filter…</option></select></label>
         ${f.customFilter ? `<label class="field" for="o-filter-own">Your filter<input id="o-filter-own" type="text" data-o="filterOwn" placeholder="Brand and part number" value="${esc(f.filterOwn || "")}"></label>` : ""}` : ""}
         <label class="field" for="o-notes">Notes<textarea id="o-notes" rows="2" data-o="notes">${esc(f.notes)}</textarea></label>
         ${f.error ? `<p class="note-err" role="alert">${esc(f.error)}</p>` : ""}
@@ -770,12 +834,40 @@
         <ul class="small">${updateLine("U.S. DOE", m.doe)}${updateLine("E85prices.com", m.e85prices)}</ul>
         <p class="small muted">Both lists update automatically every week. A station on both lists counts once.</p></section>`
       : `<section class="card"><h2>E85 stations</h2><p class="small muted"><span class="spinner"></span> Loading…</p></section>`;
+    if (P) return vAboutPartner(stations);
     return `<h1>About and disclaimer</h1>
       <section class="card"><h2>About</h2><p>GR Fuel Log is a free app for GR Corolla owners running E85: blend math at the pump, a fill log that learns your E85, and numbers from other owners.</p>
         <p><b>Version ${APP_VERSION}</b> <span class="muted">· updated ${fmtDate(APP_DATE)}</span></p>
         <p class="small muted">E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. ZIP code and town locations: <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0).</p></section>
       ${stations}
       <section class="card"><h2>Disclaimer</h2><p>Not affiliated with Toyota, the U.S. DOE or the Renewable Fuels Association. Blend plans are estimates, so check your flex-fuel sensor after every fill. Station info can be out of date. Use at your own risk.</p></section>`;
+  }
+  // A partner version's About: the partner's contact details first, then the app, its data and the disclaimer.
+  function vAboutPartner(stations) {
+    const c = P.contact || {}, st = S.settings, info = V.resolve(carModel(), st.year, st.trans);
+    const pkg = P.packages && P.packages[carModel()] ? (P.packages[carModel()].find((k) => k.id === st.pkg) || {}).name : "";
+    const car = [st.year, carName(), info.trans ? `(${V.TRANS[info.trans].toLowerCase()})` : ""].filter(Boolean).join(" ");
+    // The support email opens with what the shop needs to know, so the owner only describes the problem.
+    const body = [`App: ${P.name}, version ${APP_VERSION}`, `Car: ${car}`, pkg ? `Package: ${pkg}` : "", `Tune limit: E${st.tuneLimit}${st.tuneLimitNotSure ? " (not sure)" : ""}, target E${st.target}`, "", "What's going on:", ""].filter((x, i) => x || i > 3).join("\n");
+    const mail = (to, subject) => `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const tel = (c.phone || "").replace(/[^0-9]/g, "");
+    const row = (href, t, d, ext) => `<a class="item" href="${esc(href)}"${ext ? ` target="_blank" rel="noopener"` : ""}><span class="stack"><span class="t">${esc(t)}</span><span class="d">${esc(d)}</span></span>${icon("chevron", 18)}</a>`;
+    const contact = `<section class="card list contact"><h2 style="padding-top:10px">${esc(P.logo.alt)}</h2>
+        ${c.phone ? row(`tel:+1${tel}`, `Call ${c.phone}`, c.phoneNote || "", false) + row(`sms:+1${tel}`, `Text ${c.phone}`, "Texts go to the same number", false) : ""}
+        ${c.support ? row(mail(c.support, `${P.name}: support request`), "Support request", `Emails ${c.support} with your car's details filled in`, false) : ""}
+        ${c.contactForm ? row(c.contactForm, "Contact form", c.contactForm.replace(/^https?:\/\//, ""), true) : ""}
+        ${c.website ? row(c.website, "Website", c.website.replace(/^https?:\/\//, ""), true) : ""}
+        ${c.info ? row(`mailto:${c.info}`, "Email", c.info, false) : ""}
+        ${c.instagram ? row(c.instagram, "Instagram", "@" + c.instagram.replace(/\/+$/, "").split("/").pop(), true) : ""}
+        ${c.address ? row(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}`, "Shop", c.address, true) : ""}
+      </section>`;
+    return `<h1>About and contact</h1>${contact}
+      <section class="card"><h2>About this app</h2><p>${esc(P.tagline)}</p>
+        <p><b>Version ${APP_VERSION}</b> <span class="muted">· updated ${fmtDate(APP_DATE)}</span></p>
+        <p class="small"><b>${esc(P.poweredBy)}.</b> ${esc(P.concept)}</p>
+        <p class="small muted">E85 station lists: U.S. DOE Alternative Fuels Data Center and <a href="https://e85prices.com" target="_blank" rel="noopener">E85prices.com</a> (Renewable Fuels Association). Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. ZIP code and town locations: <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0).</p></section>
+      ${stations}
+      <section class="card"><h2>Disclaimer</h2><p>Not affiliated with Toyota, Subaru, the U.S. DOE or the Renewable Fuels Association. Blend plans are estimates, so check your flex-fuel sensor after every fill. Station info can be out of date. Use at your own risk.</p></section>`;
   }
   function vLearned() {
     const car = S.car, s = S.settings;
@@ -909,8 +1001,8 @@
 
   // ---------- admin ----------
   async function loadAdmin() {
-    const { data, error } = await sb.rpc("admin_overview");
-    S.admin = error ? { error: true } : data;
+    const [{ data, error }, pl] = await Promise.all([sb.rpc("admin_overview"), sb.rpc("admin_partner_list")]);
+    S.admin = error ? { error: true } : { ...data, partners: (pl && pl.data) || [] };
     if (S.view === "admin") render();
   }
   function vAdmin() {
@@ -926,6 +1018,7 @@
     const pct = c.claude_monthly_cap ? Math.min(100, a.month_reads / c.claude_monthly_cap * 100) : 0;
     return `<div class="stack"><h1>Admin</h1><p class="muted">Only you see this page. ${a.owners} owner${a.owners === 1 ? "" : "s"} · ${a.joined_month} joined this month</p></div>
       <section class="card" style="${a.held.length ? "background:var(--danger-bg);border-color:var(--danger)" : ""}"><h2>Waiting for you · ${a.held.length}</h2>${held}</section>
+      ${partnerHtml(a.partners || [])}
       ${flagged}
       <section class="card list"><h2 style="padding-top:10px">Sign-up record</h2>${a.log.length ? a.log.map((l) => `<div class="item" style="cursor:default"><span class="t">${esc(l.email)}</span><span class="r"><span class="chip ${tone[l.decision][0]}">${tone[l.decision][1]}</span></span><span class="d">${fmtShort(l.created_at)} · ${esc(l.reason)}</span><span></span></div>`).join("") : `<p class="small muted" style="padding-bottom:10px">No sign-ups yet.</p>`}</section>
       <section class="dark"><h2>Receipt budget · this month</h2><div class="head"><span class="big" style="font:700 30px/1 var(--display)">${a.month_reads} of ${miles(c.claude_monthly_cap || 0)}</span><span class="small soft">Claude reads · about $${(a.month_reads * 0.0005).toFixed(2)}</span></div>
@@ -937,6 +1030,17 @@
         <button class="btn" type="submit">Save rules</button></form>
       <section class="card"><h2>Warnings</h2>${a.alerts.length ? a.alerts.map((x) => `<p class="small"><b>${fmtShort(x.created_at)}</b> · ${esc(x.message)} <span class="muted">${x.emailed_at ? "Emailed." : x.email_error ? "Not emailed: " + esc(x.email_error) : "Sending…"}</span></p>`).join("") : `<p class="small muted">No warnings.</p>`}
         <p class="small muted">Emailed to ${esc(c.admin_email)} from ${esc(c.mail_from)}.</p></section>`;
+  }
+
+  // Who asked to use a partner version (LIMIT+1 Flex Fuel and the like). Nobody gets in until approved here.
+  function partnerHtml(list) {
+    const waiting = list.filter((x) => x.status === "pending").length;
+    const btn = (x, ok, label, cls) => `<button class="btn ${cls} grow" data-act="partnerDecide" data-id="${esc(x.user_id)}" data-p="${esc(x.partner)}" data-ok="${ok ? 1 : 0}">${label}</button>`;
+    const rows = list.map((x) => `<div class="stack" style="gap:8px"><b>${esc(x.email || "(deleted account)")}${x.handle ? ` · "${esc(x.handle)}"` : ""}</b>
+        <span class="small">${esc(x.partner_name)} · asked ${fmtShort(x.requested_at)} · ${x.status === "pending" ? "waiting" : x.status === "approved" ? "approved" : "rejected"}</span>
+        <div class="row">${x.status !== "approved" ? btn(x, true, "Approve", "dark") : ""}${x.status === "pending" ? btn(x, false, "Reject", "danger") : x.status === "approved" ? btn(x, false, "Take access away", "danger") : ""}</div></div>`).join("");
+    return `<section class="card" style="${waiting ? "background:var(--danger-bg);border-color:var(--danger)" : ""}"><h2>Partner versions · ${waiting} waiting</h2>
+      ${rows || `<p class="small">Nobody has asked to use a partner version yet.</p>`}<p class="small muted">Each request is emailed to fuel@shadyacres.my. The app stays locked on that phone until you approve it.</p></section>`;
   }
 
   // ---------- undo bar ----------
@@ -1369,7 +1473,7 @@
       S.pump.other = null; S.pump.which = "primary"; render();
       toast(`${prev.other.name} removed from the plan.`, "Undo", () => { S.pump.other = prev.other; S.pump.which = prev.which; render(); });
     },
-    skipAfter: () => { const f = pendingAfter(); if (f) store.set("skip-after", f.id); render(); },
+    skipAfter: () => { const f = pendingAfter(); if (f) store.set(SK + "skip-after", f.id); render(); },
     moreNumbers: () => { S.moreNumbers = true; render(); },
     svcOpen: (el) => { S.svc = { key: el.dataset.k }; S.oilForm = null; S.remForm = null; render(); window.scrollTo(0, 0); },
     svcClose: () => { S.svc = null; S.oilForm = null; S.remForm = null; render(); window.scrollTo(0, 0); },
@@ -1508,9 +1612,14 @@
       render();
     },
     carTarget: (el) => { const f = S.carForm; f.target = Math.max(30, Math.min(C.maxTarget({ tuneLimit: Number(String(f.tuneLimit).replace("ns", "")) }), Number(f.target) + Number(el.dataset.d))); render(); },
+    partnerDecide: async (el) => { await sb.rpc("admin_partner_decide", { p_user: el.dataset.id, p_partner: el.dataset.p, p_approve: el.dataset.ok === "1" }); loadAdmin(); },
     decide: async (el) => { await sb.rpc("admin_decide", { p_user: el.dataset.id, p_approve: el.dataset.ok === "1" }); loadAdmin(); },
     unflag: async (el) => { await sb.rpc("admin_unflag", { p_user: el.dataset.id }); loadAdmin(); },
-    recheck: async () => { const { data } = await sb.from("profiles").select("*").eq("id", S.user.id).single(); if (data) { S.profile = data; if (approved()) await loadAll(); } render(); },
+    recheck: async () => {
+      const { data } = await sb.from("profiles").select("*").eq("id", S.user.id).single(); if (data) S.profile = data;
+      if (P) { const pr = await sb.rpc("partner_request", { p_partner: P.id }); if (pr.data) S.partnerStatus = pr.data; }
+      if (approved()) await loadAll(); render();
+    },
     resend: () => { S.signin.step = "email"; render(); },
     otherEmail: () => { S.signin = { ...S.signin, step: "email", email: "", code: "", error: "" }; render(); },
     signOut: async () => { await sb.auth.signOut({ scope: "local" }); },

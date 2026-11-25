@@ -72,6 +72,10 @@
       }
       if (name === "station_summary") return { data: { total: 7056, doe: { ran_at: "2026-11-16T09:17:05Z", listed: null, added: 5, removed: null, total: 4817 },
         e85prices: { ran_at: "2026-11-23T05:30:03Z", listed: 6316, added: 9, removed: 0, total: 2239, recent_prices: 31 } } };
+      // Partner versions: the test sets how this account stands, and who is waiting in Admin.
+      if (name === "partner_request") return { data: window.__partnerStatus || "pending" };
+      if (name === "admin_partner_list") return { data: window.__partnerList || [] };
+      if (name === "admin_partner_decide") { (window.__partnerList || []).forEach((x) => { if (x.user_id === args.p_user && x.partner === args.p_partner) x.status = args.p_approve ? "approved" : "rejected"; }); return { data: null }; }
       if (name === "stations_near" && window.__nearFail) return { data: null, error: { message: "network" } };
       if (name === "stations_near") return { data: [
         { id: "afdc-th84", source: "afdc", name: "Thorntons · 813 N St Joseph Ave", city: "Evansville", state: "IN", distance_m: 2937, standardized: true, known: false, e85_listed: true, listed_by: "both" },

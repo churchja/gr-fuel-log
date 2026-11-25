@@ -1,4 +1,5 @@
 // Emails one warning to the admin through Fastmail. Called by the database when an alert is inserted.
+// Requests to use a partner version (LIMIT+1 Flex Fuel and the like) go to the app's own address instead.
 import nodemailer from "npm:nodemailer@10.2.1";
 import { adminClient, fromDatabase } from "./common.ts";
 
@@ -10,7 +11,11 @@ const SUBJECTS: Record<string, string> = {
   daily_limit_streak: "Owner at the receipt limit 3 days running",
   junk_data: "Implausible fills held out of the community view",
   claude_spend: "Claude spend limit reached",
+  partner_request: "Someone is waiting for your approval",
+  unchecked_year: "A model year's service schedule needs checking",
 };
+// "GR Fuel Log <fuel@shadyacres.my>" -> "fuel@shadyacres.my"
+const addressOf = (from: string) => (from.match(/<([^>]+)>/)?.[1] ?? from).trim();
 
 Deno.serve(async (req) => {
   const db = adminClient();
@@ -31,7 +36,7 @@ Deno.serve(async (req) => {
     const transport = nodemailer.createTransport({ host: "smtp.fastmail.com", port: 465, secure: true, auth: { user: cfg.smtp_user, pass } });
     await transport.sendMail({
       from: cfg.mail_from,
-      to: cfg.admin_email,
+      to: alert.kind === "partner_request" ? addressOf(cfg.mail_from) : cfg.admin_email,
       subject: `GR Fuel Log: ${SUBJECTS[alert.kind] ?? "Warning"}`,
       text: `${alert.message}\n\nOpen Admin: https://fuel.shadyacres.my/#admin\n\nSent ${new Date(alert.created_at).toUTCString()} by GR Fuel Log.`,
     });

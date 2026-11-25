@@ -1,0 +1,55 @@
+/* LIMIT+1 Flex Fuel: LIMIT+1's design language (black and white, Poppins headings, Jost text, an orange-red highlight)
+   laid over GR Fuel Log's own styles. Only tokens and a few brand pieces change; the layout is the shared app.css. */
+:root {
+  --bg: #f5f5f5; --surface: #ffffff; --sunken: #f2f2f2; --ink: #1c1d1d; --muted: #5f6161; --line: #e8e8e1; --dash: #d4d4cc;
+  --accent: #111111; --accent-ink: #ffffff; --accent-text: #1c1d1d; --highlight: #ffece8;
+  --go: #111111; --go-ink: #ffffff; --go-edge: #111111;
+  --readout: #111111; --readout-ink: #ffffff; --readout-text: #f2f2f2; --readout-dim: #9b9d9d; --readout-soft: #c8caca;
+  --track: #2e3030; --range: #4a2a22;
+  --brand: #ff4f33; --promo-bg: #1c1d1d;
+  --display: "Poppins", "Segoe UI", Roboto, system-ui, sans-serif;
+  --body: "Jost", "Segoe UI", Roboto, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0b0b; --surface: #161717; --sunken: #202121; --ink: #f2f2f2; --muted: #a3a5a5; --line: #2b2c2c; --dash: #3a3b3b;
+    --accent: #ffffff; --accent-ink: #111111; --accent-text: #ffffff; --highlight: #3b1d16;
+    --go: #ffffff; --go-ink: #111111; --go-edge: #ffffff; --readout: #000000; --promo-bg: #000000;
+  }
+}
+.stepper { box-shadow: none; }
+.readout .v { font-size: 36px; } .readout .v.mid { font-size: 21px; }
+.stepper span, .readout .k, .eyebrow { letter-spacing: .08em; }
+.tabs a[aria-current="page"] { border-top-color: var(--brand); }
+.btn.primary { font-weight: 600; letter-spacing: .02em; }
+
+/* The LIMIT+1 logo, on every screen */
+.brandbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.brandbar img { height: 20px; width: auto; display: block; }
+.brandbar span { font: 600 11px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.signin .brandmark img, .brandmark img { height: 34px; width: auto; display: block; }
+.brandmark { display: grid; gap: 10px; }
+.brandmark b { font: 700 28px/1.1 var(--display); color: #ffffff; }
+.powered { font: 500 13px/1.4 var(--body); color: var(--readout-soft); }
+.powered b { color: var(--brand); font-weight: 600; }
+
+/* The slim scrolling LIMIT+1 bar above the bottom menu */
+.promo { position: relative; overflow: hidden; height: 32px; background: var(--promo-bg); color: #ffffff; font: 500 13px/32px var(--body);
+  margin: 0 calc(-1 * max(6px, env(safe-area-inset-right, 0px))) 0 calc(-1 * max(6px, env(safe-area-inset-left, 0px))); }
+.promo .track { display: flex; width: max-content; white-space: nowrap; will-change: transform; animation: promo-scroll var(--dur, 60s) linear infinite; }
+.promo .half { display: flex; flex: none; align-items: center; }
+.promo:hover .track, .promo:focus-within .track, .promo.paused .track { animation-play-state: paused; }
+.tabs .promo a { color: #ffffff; text-decoration: none; padding: 0 12px; display: inline-flex; flex: none; flex-direction: row; align-items: center; gap: 7px; height: 32px; border: 0; font: inherit; }
+.promo a:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; }
+.promo .sale { color: var(--brand); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.promo .tag { font: 700 10px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; background: var(--brand); color: #111111; padding: 3px 5px; border-radius: 3px; }
+.promo .sep { width: 4px; height: 4px; border-radius: 50%; background: #6a6c6c; align-self: center; }
+@keyframes promo-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .promo { overflow-x: auto; } .promo .track { animation: none; } }
+body.partner #app { padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+body.partner .toast { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+body.partner.signin #app { padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
+
+/* About: LIMIT+1's contact card */
+.contact { display: grid; gap: 2px; }
+.contact a.item { grid-template-columns: minmax(0, 1fr) auto; }

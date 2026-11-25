@@ -46,6 +46,7 @@
     },
     gr86: {
       name: "GR86", tank: 13.2,
+      note: "BRZ owners: this is Toyota's GR86 schedule. Subaru's own BRZ booklet hasn't been checked yet.",
       years: { 2022: guide("2286"), 2023: "https://www.toyota.com/content/dam/toyota/brochures/pdf/2023/T-MMS-23_86.pdf", 2024: guide("24_86"), 2025: guide("25_86"), 2026: guide("26_86") },
       trans: () => ["mt", "at"],
       items: gr86Items,

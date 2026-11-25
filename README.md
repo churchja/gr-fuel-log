@@ -13,7 +13,8 @@ Live at https://fuel.shadyacres.my.
 | `config.js` | Public settings: Supabase URL, publishable key, Turnstile site key. No secrets. |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Install-to-home-screen and offline support |
 | `supabase/functions/` | Server functions: `read-receipt` (Claude Haiku 5.5), `notify` (Fastmail warnings), `learn` (the model) |
-| `test/` | Tests for the math, the learning model and the UI |
+| `limitplus1/` | LIMIT+1 Flex Fuel: a branded partner version of the same app (its settings in `partner.js`, theme in `partner.css`) |
+| `test/` | Tests for the math, the service schedules, the learning model, the UI and the LIMIT+1 version |
 
 The database (tables, access rules, sign-up gate, admin functions) lives in the Supabase project `gr-fuel-log`
 and its migration history.
@@ -102,3 +103,12 @@ select net.http_post(
    recomputes E85 strength, sensor offsets and fuel-left curves after the first fill is saved.
 
 The file holds members' email addresses and fill history; keep it private.
+
+## Partner versions
+
+A partner version is a folder with its own `index.html`, `partner.js`, `partner.css`, icons, manifest and `sw.js`,
+loading the shared `app.js`, `calc.js` and `service.js`. `partner.js` sets `window.PARTNER`: name, logo, the cars
+offered, package presets, contact details and the promo bar. Every account must be approved for the partner in Admin
+(`public.partner_access`); requests are emailed to the app's own address. When the shared files' `?v=` number changes,
+change it in the partner's `index.html` and `sw.js` too.
+
