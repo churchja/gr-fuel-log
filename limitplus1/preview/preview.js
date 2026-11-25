@@ -4,17 +4,18 @@
 // The stations are a snapshot of the U.S. DOE's public E85 list; the owners, fills and prices are made up.
 (function () {
   "use strict";
-  const KEY = "lp1-preview-v1";
+  const P = window.PARTNER;
+  // A demo for another company (demo/<id>/, built by demos/build.js) keeps its own data and its logo beside its page.
+  const KEY = P.demo ? `${P.id}-demo-v1` : "lp1-preview-v1";
   const UID = "preview-owner";
   const HOME = { lat: 42.2308, lon: -88.3324 }; // Crystal Lake, IL 60014, near LIMIT+1's shop
   const DAY = 86400000;
-  const P = window.PARTNER;
 
   // ---------- what the shared app reads ----------
   window.APP_CONFIG = { supabaseUrl: "https://preview.invalid", supabaseKey: "preview" }; // no database, no bot check
   Object.assign(P, {
-    storageKey: "lp1-preview",
-    logo: { ...P.logo, light: "../" + P.logo.light, dark: "../" + P.logo.dark },
+    storageKey: P.demo ? `${P.id}-demo` : "lp1-preview",
+    logo: P.demo ? P.logo : { ...P.logo, light: "../" + P.logo.light, dark: "../" + P.logo.dark },
     preview: {
       welcome: "This preview runs the real app on sample data: an owner near Crystal Lake, IL with about ten weeks of fills. Set up a car, then look around.",
       note: "No sign-in. Nothing you type leaves this phone, and it's gone when you close the tab. Real customers sign in with a code we email them, and each new account is approved by hand.",

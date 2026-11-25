@@ -1,0 +1,29 @@
+/* Delicious Tuning's look, read from https://www.delicioustuning.com. Built by demos/build.js. */
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Arimo:wght@400;600;700&display=swap");
+:root {
+  --bg: #eef0ee; --surface: #ffffff; --sunken: #e4e7e4; --ink: #14181b; --muted: #5a636a; --line: #d3d8d4; --dash: #c3c9c5;
+  --accent: #f0c000; --accent-ink: #1d1700; --accent-text: #7d6200; --highlight: #fff6cc;
+  --good: #1d7349; --good-bg: #dff0e6; --go: #1d7349; --go-ink: #ffffff; --go-edge: #155c39; --low: #1e3a8a; --high: #9b1c1c; --warn: #a8501a; --warn-bg: #f6e6db;
+  --danger: #b0122c; --danger-bg: #fadfe4;
+  --readout: #12171b; --readout-ink: #f0c000; --readout-text: #e8ece9; --readout-dim: #8d979e; --readout-soft: #b4bcc2;
+  --track: #2a333a; --band: #2f8a59; --limit: #ff5a72; --range: #5c4d12;
+  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
+  color-scheme: light;
+}
+:root {
+    --bg: #0f1316; --surface: #171c20; --sunken: #1f262b; --ink: #e8ece9; --muted: #9aa3aa; --line: #2b3339; --dash: #3a444b;
+    --accent-text: #f0c000; --highlight: #3a3210;
+    --good: #63cf96; --good-bg: #15301f; --go: #237a4e; --go-edge: #3fa56f; --low: #8fb3ff; --high: #ff8a8a; --warn: #f2a66c; --warn-bg: #382315;
+    --danger: #ff7088; --danger-bg: #3c1520; --readout: #070a0c;
+    color-scheme: dark;
+  }
+:root { --bg: #0c1116; --surface: #161b21; --sunken: #20262d; --ink: #f0f0f0; --muted: #a2a6aa; --line: #2b3239; --dash: #3a424a; --accent: #e01020; --accent-ink: #ffffff; --accent-text: #ff5a66; --highlight: #3a1418;
+  --go: #e01020; --go-ink: #ffffff; --go-edge: #e01020; --readout: #000000; --readout-ink: #ffffff; --readout-text: #f0f0f0; --brand: #e01020; --promo-bg: #000000;
+  --good: #63cf96; --good-bg: #15301f; --warn: #f2a66c; --warn-bg: #382315; --danger: #ff7088; --danger-bg: #3c1520; --low: #8fb3ff; --high: #ff8a8a;
+  --display: Oswald, "Arial Narrow", sans-serif; --body: Arimo, Arial, sans-serif; color-scheme: dark; }
+h1, h2, .btn.primary, .tabs span { text-transform: uppercase; letter-spacing: .04em; } h1 { font-weight: 500; }
+.brandbar img { height: 24px; } .signin .brandmark img, .brandmark img { height: 44px; }
+.preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
+.preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+body.signin #app { min-height: calc(100svh - 30px); }
