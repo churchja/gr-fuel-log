@@ -15,6 +15,7 @@ Live at https://fuel.shadyacres.my.
 | `supabase/functions/` | Server functions: `read-receipt` (Claude Haiku 5.5), `notify` (Fastmail warnings), `learn` (the model) |
 | `limitplus1/` | LIMIT+1 Flex Fuel: a branded partner version of the same app (its settings in `partner.js`, theme in `partner.css`) |
 | `test/` | Tests for the math, the service schedules, the learning model, the UI and the LIMIT+1 version |
+| `video/` | Scripts that record the how-to video from the real app on sample data (`shots.js`: the storyboard stills) |
 
 The database (tables, access rules, sign-up gate, admin functions) lives in the Supabase project `gr-fuel-log`
 and its migration history.
