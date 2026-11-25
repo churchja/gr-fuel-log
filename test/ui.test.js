@@ -273,7 +273,7 @@ const W = path.resolve(__dirname, "..");
   await page.waitForSelector("text=E85 stations as of");
   const about = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
   log("8e about:", about);
-  if (!/Version 33/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
+  if (!/Version 34/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
   await shot("about");
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");
@@ -360,7 +360,7 @@ const W = path.resolve(__dirname, "..");
   await page.waitForFunction(() => document.querySelector("#g0") && document.querySelector("#g0").value === "110", null, { timeout: 15000 });
   const raceRead = await page.evaluate(() => ({ grade: document.querySelector("#g0").value, grades: [...document.querySelector("#g0").options].map((o) => o.value).join(","), price: document.querySelector("#pr0").value, total: document.querySelector("#to0").value }));
   log("15a race fuel receipt:", JSON.stringify(raceRead));
-  if (raceRead.price !== "11.499" || raceRead.grades !== "87,88,89,91,92,93,110") throw new Error("a race fuel receipt should keep 110 octane and $11.499 a gallon");
+  if (raceRead.price !== "11.499" || raceRead.grades !== "87,88,89,91,92,93,100,104,110,112,116,118") throw new Error("a race fuel receipt should keep 110 octane and $11.499 a gallon");
 
   // ---- Service reminders, the after-fill reading, and the shorter screens ----
   const daysAgo = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString("en-CA");

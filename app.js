@@ -11,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 33, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 34, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -450,7 +450,7 @@
       ${S.form.confirmStop === i ? (() => { const g = num(st.gallons), t = num(st.total) ?? (g !== null && num(st.price) !== null ? g * num(st.price) : null); const what = [g !== null ? `${g.toFixed(2)} gal` : "", t !== null ? money(t) : ""].filter(Boolean).join(", ");
         return `<div class="confirm" role="alert"><span class="grow">Delete stop ${i + 1}${what ? ` (${what})` : ""}?</span><button type="button" class="btn danger" data-act="removeStop" data-i="${i}">Delete</button><button type="button" class="btn" data-act="keepStop">Keep</button></div>`; })() : ""}
       <div class="seg" role="group" aria-label="Fuel for stop ${i + 1}">${kinds.map(([k, l]) => `<button type="button" data-act="stopKind" data-i="${i}" data-k="${k}" aria-pressed="${st.kind === k}">${esc(l)}</button>`).join("")}</div>
-      ${st.kind === "gas" ? `<div class="${num(st.ethanol) !== null ? "grid2" : "stack"}"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${gradeList(st.grade).map((g) => `<option value="${g}" ${Number(st.grade) === g ? "selected" : ""}>${g} octane</option>`).join("")}</select></label>
+      ${st.kind === "gas" ? `<div class="${num(st.ethanol) !== null ? "grid2" : "stack"}"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${gradeOptions(st.grade)}</select></label>
         ${num(st.ethanol) !== null ? `<label class="field" for="ge${i}">Ethanol %<input id="ge${i}" type="number" min="0" max="100" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" placeholder="${C.gasEthanol(s, st.grade)}"></label>` : ""}</div>` : ""}
       ${st.kind === "other" ? `<div class="grid2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)"><label class="field" for="fn${i}">What fuel<input id="fn${i}" type="text" data-s="fuelName" data-i="${i}" value="${esc(st.fuelName)}" placeholder="Race fuel, blender pump E30…"></label>
         <label class="field" for="oe${i}">Ethanol %<input id="oe${i}" type="number" min="0" max="100" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" class="${hl("ethanol")}"></label></div>
@@ -481,8 +481,14 @@
     if (!g || f.stops.findIndex((x) => x.kind === st.kind) !== i) return "";
     return ` placeholder="${esc(g)}" aria-description="Pump plan: ${esc(g.replace("~", "about "))} gallons"`;
   }
-  // The pump grades, plus a stop's own grade when it isn't one of them (race fuel read from a receipt, like 110).
-  const gradeList = (g) => (num(g) !== null && !C.GRADES.includes(num(g)) ? [...C.GRADES, num(g)].sort((a, b) => a - b) : C.GRADES);
+  // A gas stop's grades: pump gas, then race fuel (no ethanol), plus the stop's own grade when it's in neither list
+  // (an octane read from a receipt, like 108).
+  function gradeOptions(cur) {
+    const g = num(cur), extra = g !== null && !C.GRADES.includes(g) && !C.RACE_GRADES.includes(g) ? g : null;
+    const add = (list, fits) => (extra !== null && fits ? [...list, extra].sort((a, b) => a - b) : list);
+    const opt = (v) => `<option value="${v}" ${g === v ? "selected" : ""}>${v} octane</option>`;
+    return `${add(C.GRADES, extra < 100).map(opt).join("")}<optgroup label="Race fuel, no ethanol">${add(C.RACE_GRADES, extra >= 100).map(opt).join("")}</optgroup>`;
+  }
   function cleanStops(stops) {
     return stops.map((st) => {
       const g = num(st.gallons), p = num(st.price); let t = num(st.total);
@@ -552,7 +558,11 @@
     const filled = [];
     if (r.fuel === "e85" || r.fuel === "E85") { st.kind = "e85"; filled.push("fuel"); }
     else if (r.fuel === "gas") { st.kind = "gas"; const oct = num(r.octane); if (oct !== null && oct > 0 && oct <= C.MAX_OCTANE) st.grade = oct; filled.push("fuel"); }
-    else if (r.fuel === "other") st.kind = "other";
+    else if (r.fuel === "other") {
+      // Race fuel read as "other" but with its octane printed is gas, from the race grades (no ethanol).
+      const oct = num(r.octane);
+      if (oct !== null && oct >= 100 && oct <= C.MAX_OCTANE) { st.kind = "gas"; st.grade = oct; filled.push("fuel"); } else st.kind = "other";
+    }
     // A read with an impossible ethanol % (over 100 is more than pure ethanol) or octane is ignored. Race fuel octane
     // runs past 100, up to C.MAX_OCTANE.
     const eth = num(r.ethanol ?? r.ethanol_percent);
@@ -966,7 +976,7 @@
         <section class="card"><h2>Fuel</h2>
           <div class="stack"><b>Gas grade you mix with</b>${seg("gasGrade", C.GRADES.map((g) => [g, g]), "Gas grade")}</div>
           <label class="check" for="c-e0"><input id="c-e0" type="checkbox" data-c="ethanolFree" ${f.ethanolFree ? "checked" : ""}>Ethanol-free (E0)</label>
-          <p class="small muted">The math uses your gas's own ethanol: E10 for most grades, E15 for Unleaded 88, none when ethanol-free.</p>
+          <p class="small muted">The math uses your gas's own ethanol: E10 for most grades, E15 for Unleaded 88, none when ethanol-free or for race fuel (100 octane and up).</p>
           ${pickField("Primary E85 station", "primaryE85", "e85", "c-e85")}
           ${pickField("Primary gas station", "primaryGas", "gas", "c-gas")}
         </section>

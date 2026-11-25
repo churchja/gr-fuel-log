@@ -7,6 +7,8 @@
   // The highest octane a receipt can show: race fuels at track pumps reach about 118 pump octane (VP C16, Sunoco's
   // top leaded fuel), and VP rates C16 over 120 research octane.
   const MAX_OCTANE = 125;
+  // Race fuel from a track pump, offered in a fill's grade list. From 100 octane up, gas counts as ethanol-free.
+  const RACE_GRADES = [100, 104, 110, 112, 116, 118];
   // The highest price per gallon a receipt read keeps: race fuel at a track pump can run $10 to $20 a gallon.
   const MAX_PRICE = 40;
   const TUNE_LIMITS = [50, 60, 70, 85];
@@ -32,7 +34,8 @@
     if (num(override) !== null) return num(override);
     const s = withDefaults(settings);
     if (s.ethanolFree) return 0;
-    return Number(grade ?? s.gasGrade) === 88 ? 15 : 10;
+    const g = Number(grade ?? s.gasGrade);
+    return g >= 100 ? 0 : g === 88 ? 15 : 10; // race fuel (100 octane and up) has none; Unleaded 88 is E15
   }
   function seasonalDefault(dateStr) {
     const m = Number(String(dateStr).slice(5, 7));
@@ -332,7 +335,7 @@
     };
   }
 
-  root.Calc = { TANK, BAND, GRADES, MAX_OCTANE, MAX_PRICE, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, keyFor, withDefaults, maxTarget,
+  root.Calc = { TANK, BAND, GRADES, MAX_OCTANE, MAX_PRICE, RACE_GRADES, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, keyFor, withDefaults, maxTarget,
     gasEthanol, seasonalDefault, stopTotals, e85Assumption, plan, bandOf, deriveRows, summarize, addMonths, oilStatus, parseReceiptText,
     BRANDS: STATION_BRANDS, brandFix, tidyBrand, tidyStreet, splitAddress, hasStreetNumber, cleanStation };
 })(typeof window !== "undefined" ? window : globalThis);

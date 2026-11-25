@@ -6,8 +6,8 @@ const PROMPT = `This photo is a receipt from a US gas station pump or register. 
 Rules:
 - station: the business name, plus the street if it is printed. Null if not printed.
 - date: the purchase date as YYYY-MM-DD. Null if unreadable.
-- fuel: "E85" for E85, Flex Fuel or FFV; "gas" for regular, plus, premium, super, unleaded or a numbered octane grade; "other" for anything else (race fuel, E15 sold as a separate blend, diesel). Null if unclear.
-- octane: the octane number for gas when printed or clearly implied (87, 88, 89, 91, 92, 93). Null otherwise.
+- fuel: "E85" for E85, Flex Fuel or FFV; "gas" for regular, plus, premium, super, unleaded, a numbered octane grade, or race fuel with its octane printed; "other" for anything else (E15 sold as a separate blend, diesel, race fuel with no octane printed). Null if unclear.
+- octane: the octane number for gas when printed or clearly implied: a pump grade (87, 88, 89, 91, 92, 93) or a race fuel's octane (100 to 125, for example 110 or 116). Null otherwise.
 - ethanol_percent: only when the receipt states it (for example "E15" or "ethanol free" = 0). Null otherwise.
 - gallons, price_per_gallon, total: as printed, in gallons and US dollars. Null for anything you cannot read clearly.
 Never guess a number.`;

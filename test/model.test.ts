@@ -1,4 +1,4 @@
-import { observations, fitBiases, runFilters, summarizeTrack, fitDte, predictedBlend, biasBasis, TANK, type Fill, type Owner } from "../supabase/functions/learn/model.ts";
+import { observations, fitBiases, runFilters, summarizeTrack, fitDte, predictedBlend, biasBasis, TANK, tankParts, gasStopEthanol, type Fill, type Owner } from "../supabase/functions/learn/model.ts";
 
 // Simulate owners filling at stations. trueE(day) is the pump's real E85 strength.
 let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -49,4 +49,17 @@ console.log("bias basis alice:", biasBasis(obs, "alice"), "| solo dan:", biasBas
   const keys = new Set([...o1, ...o2].map((o) => o.station));
   console.log("id-keyed station tracks (expect 1):", keys.size, [...keys][0]);
   if (keys.size !== 1 || ![...keys][0].startsWith("id:")) throw new Error("FAIL id keys");
+}
+
+// A gas stop's ethanol follows the stop's own grade, like the app: race fuel (100 octane and up) has none.
+{
+  const fill = (stops: Fill["stops"]): Fill => ({ id: "g", user_id: "g", date: "2026-11-20", odometer: 1, dte: 30, sensor_before: 40, sensor_after: 40, full: true, stops });
+  const race = tankParts(fill([{ kind: "e85", gallons: 5, station: "A" }, { kind: "gas", grade: 110, gallons: 5 }]), 10).ge;
+  const pump = tankParts(fill([{ kind: "e85", gallons: 5, station: "A" }, { kind: "gas", grade: 93, gallons: 5 }]), 10).ge;
+  const e15 = tankParts(fill([{ kind: "gas", grade: 88, gallons: 4 }]), 10).ge;
+  const noGrade = tankParts(fill([{ kind: "gas", gallons: 4 }]), 15).ge;
+  const logged = gasStopEthanol({ kind: "gas", grade: 110, ethanol: 5 }, 10);
+  const free = tankParts(fill([{ kind: "gas", grade: 93, gallons: 5 }]), 0, true).ge;
+  console.log("gas stop ethanol gallons: race 110", race, "| 93", pump, "| 88", e15, "| no grade (owner's E15)", noGrade, "| race with 5% logged", logged, "| ethanol-free owner", free);
+  if (race !== 0 || pump !== 50 || e15 !== 60 || noGrade !== 60 || logged !== 5 || free !== 0) throw new Error("FAIL gas stop ethanol");
 }

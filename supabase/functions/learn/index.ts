@@ -24,8 +24,8 @@ Deno.serve(async (req) => {
   const owners = new Map<string, Owner & { flagged: boolean }>();
   for (const p of profiles) {
     const s = p.settings ?? {};
-    const gasEthanol = s.ethanolFree ? 0 : Number(s.gasGrade) === 88 ? 15 : 10;
-    owners.set(p.id, { id: p.id, share: Boolean(s.share), gasEthanol, learnSince: p.learn_since, flagged: p.flagged });
+    const gasEthanol = s.ethanolFree ? 0 : Number(s.gasGrade) >= 100 ? 0 : Number(s.gasGrade) === 88 ? 15 : 10;
+    owners.set(p.id, { id: p.id, share: Boolean(s.share), gasEthanol, ethanolFree: Boolean(s.ethanolFree), learnSince: p.learn_since, flagged: p.flagged });
   }
   const byOwner = new Map<string, Fill[]>();
   for (const f of fills) if (owners.has(f.user_id)) (byOwner.get(f.user_id) ?? byOwner.set(f.user_id, []).get(f.user_id)!).push(f);

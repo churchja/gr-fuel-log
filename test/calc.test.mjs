@@ -21,6 +21,10 @@ t("rich tank near limit -> zero E85 and over cap", p6.clamped === "zero" && p6.o
 // Ethanol-free and E15 gas
 t("ethanol-free gas = 0", C.gasEthanol({ ethanolFree: true }, 93) === 0, null);
 t("88 octane = E15", C.gasEthanol({}, 88) === 15, null);
+t("race fuel 100 and up = no ethanol", C.gasEthanol({}, 100) === 0 && C.gasEthanol({}, 110) === 0 && C.gasEthanol({}, 99) === 10 && C.gasEthanol({}, 93) === 10, null);
+t("race fuel with its ethanol logged keeps it", C.gasEthanol({}, 110, 5) === 5, null);
+const raceTot = C.stopTotals({ stops: [{ kind: "e85", gallons: 5 }, { kind: "gas", grade: 110, gallons: 5 }] }, {});
+t("a race fuel stop adds no ethanol", raceTot.ethGal === 0 && raceTot.gallons === 10, raceTot);
 // Bands
 t("E43 at E40 target is on target", C.bandOf(43, 40, 50) === "on", null);
 t("E44 is high", C.bandOf(44, 40, 50) === "high", null);

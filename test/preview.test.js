@@ -115,7 +115,7 @@ const W = path.resolve(__dirname, "..");
   await go("about", "text=E85 stations as of");
   const about = await text();
   log("8 about:", about.slice(0, 300));
-  expect(/Version 33/.test(about) && /Call 815-345-3035/.test(about), "About page wrong");
+  expect(/Version 34/.test(about) && /Call 815-345-3035/.test(about), "About page wrong");
 
   // 9 A reload keeps the tab's preview; Start over wipes it
   await page.reload(); await page.waitForSelector(".brandbar");

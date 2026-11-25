@@ -15,12 +15,12 @@ const MODEL_VAR = 0.25;        // floor for model error
 const BIAS_PRIOR_VAR = 4;      // sensor bias prior: N(0, 2^2)
 const BIAS_LIMIT = 5;
 
-export type Stop = { station?: string; station_id?: string; kind?: string; fuel?: string; ethanol?: number | null; gallons?: number | null };
+export type Stop = { station?: string; station_id?: string; kind?: string; fuel?: string; ethanol?: number | null; gallons?: number | null; grade?: number | null };
 export type Fill = {
   id: string; user_id: string; date: string; odometer: number | null; dte: number | null;
   sensor_before: number | null; sensor_after: number | null; full: boolean; stops: Stop[];
 };
-export type Owner = { id: string; share: boolean; gasEthanol: number; learnSince: string | null };
+export type Owner = { id: string; share: boolean; gasEthanol: number; learnSince: string | null; ethanolFree?: boolean };
 export type Obs = {
   owner: string; station: string; name: string; day: number; date: string; eraw: number; k: number; v: number;
   cb: number; r: number; t: number; x: number; ge: number; m: number;
@@ -38,7 +38,18 @@ export function seasonalDefault(day: number): number {
   return m >= 4 && m <= 9 ? 85 : 70;
 }
 
-export function tankParts(f: Fill, gasEthanol: number) {
+// A gas stop's ethanol %, the same rule as the app's calc.js: as logged on the stop; otherwise none for an owner who
+// buys ethanol-free gas or for race fuel (100 octane and up), 15% for Unleaded 88, 10% for other pump gas, and the
+// owner's own gas when the stop has no grade.
+export function gasStopEthanol(s: Stop, ownerGas: number, ethanolFree = false) {
+  const e = num(s.ethanol);
+  if (e !== null) return e;
+  if (ethanolFree) return 0;
+  const g = num(s.grade);
+  return g === null ? ownerGas : g >= 100 ? 0 : g === 88 ? 15 : 10;
+}
+
+export function tankParts(f: Fill, gasEthanol: number, ethanolFree = false) {
   let x = 0, p = 0, ge = 0, big = 0, station = "", stationId = "";
   for (const s of f.stops ?? []) {
     const g = num(s.gallons) ?? 0;
@@ -46,7 +57,7 @@ export function tankParts(f: Fill, gasEthanol: number) {
     p += g;
     const k = kindOf(s);
     if (k === "e85") { x += g; if (g > big) { big = g; station = s.station ?? ""; stationId = s.station_id ?? ""; } }
-    else ge += g * (num(s.ethanol) ?? (k === "gas" ? gasEthanol : 10));
+    else ge += g * (k === "gas" ? gasStopEthanol(s, gasEthanol, ethanolFree) : num(s.ethanol) ?? 10);
   }
   return { x, p, ge, station, stationId };
 }
@@ -59,7 +70,7 @@ export function observations(owner: Owner, fills: Fill[]): Obs[] {
     const next = fs[i + 1];
     const cb = num(f.sensor_before);
     if (!f.full || cb === null) return;
-    const { x, p, ge, station, stationId } = tankParts(f, owner.gasEthanol);
+    const { x, p, ge, station, stationId } = tankParts(f, owner.gasEthanol, owner.ethanolFree);
     if (x < 1 || (!station.trim() && !stationId)) return;
     if (TANK - p < -0.5) return;
     let m: number | null = null, settled = false;
