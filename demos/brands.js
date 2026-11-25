@@ -140,4 +140,71 @@ module.exports = {
       .brandbar { background: #063980; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 10px 16px; border: 0; } .brandbar span { color: #c7d6ee; }
       .brandbar img { height: 20px; } .signin .brandmark img, .brandmark img { height: 34px; }`,
   },
+  // Batch 3 (read Nov 25, 2026). Their cars aren't in the app either. COBB Tuning's site blocks automated visits, so it isn't here.
+  eflex: {
+    mockup: true, lookOnly: true, title: "eFlexFuel", site: "https://eflexfuel.com",
+    logo: "https://eflexfuel.com/pub/media/images/logo/logo-eflexfuel-inverted.svg",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Oswald:wght@500;600&family=Public+Sans:wght@400;500;600;700",
+    partner: { ...base("eFlexFuel", "eFlexFuel"), id: "eflex", storageKey: "eflex",
+      contact: { phone: "833-539-3835", website: "https://eflexfuel.com" },
+      promo: { items: [{ name: "eFlexPro E85 conversion kit", url: "https://eflexfuel.com", models: ["grc"] }, { name: "eFlexPlus", url: "https://eflexfuel.com", models: ["grc"] }] } },
+    css: `:root { --bg: #f4f4f4; --surface: #ffffff; --sunken: #ececec; --ink: #111111; --muted: #5c5c5c; --line: #dcdcdc; --accent: #e04a00; --accent-ink: #ffffff; --accent-text: #c23f00; --highlight: #ffe6d9;
+        --go: #000000; --go-ink: #ffffff; --go-edge: #000000; --readout: #000000; --readout-ink: #ffffff; --brand: #ff5500; --promo-bg: #000000;
+        --display: Oswald, "Arial Narrow", sans-serif; --body: "Public Sans", "Segoe UI", sans-serif; }
+      h1, h2, .btn.primary { text-transform: uppercase; letter-spacing: .02em; }
+      .brandbar { background: #000000; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 12px 16px; border: 0; } .brandbar span { color: #d0d0d0; }
+      .brandbar img { height: 14px; } .signin .brandmark img, .brandmark img { height: 22px; }`,
+  },
+  afd: {
+    mockup: true, lookOnly: true, title: "Advanced Fuel Dynamics", site: "https://www.advancedfueldynamics.com",
+    logo: "https://www.advancedfueldynamics.com/cdn/shop/files/logo_1024x1024.png?v=1613534490",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Lato:wght@400;700;900&family=Roboto:wght@700;800",
+    partner: { ...base("Advanced Fuel Dynamics", "Advanced Fuel Dynamics"), id: "afd", storageKey: "afd",
+      contact: { phone: "866-902-3835", website: "https://www.advancedfueldynamics.com" },
+      promo: { items: [{ name: "ProFlex DXI flex fuel system", url: "https://www.advancedfueldynamics.com", models: ["grc"] }, { name: "AFD E-Sense fuel content sensor", url: "https://www.advancedfueldynamics.com", models: ["grc"] }] } },
+    css: `:root { --bg: #ffffff; --surface: #ffffff; --sunken: #f1f3ee; --ink: #333333; --muted: #666666; --line: #e1e4dc; --accent: #3f8a1c; --accent-ink: #ffffff; --accent-text: #3a7d1a; --highlight: #e6f4d9;
+        --go: #3f8a1c; --go-ink: #ffffff; --go-edge: #35751a; --readout: #1c2118; --readout-ink: #ffffff; --brand: #84c44c; --promo-bg: #84c44c;
+        --display: Roboto, "Segoe UI", sans-serif; --body: Lato, "Segoe UI", sans-serif; }
+      .btn { border-radius: 25px; }
+      body.signin { background: #ffffff; } body.signin #app { color: #333333; }
+      body.signin .soft, body.signin #app > p { color: #666666 !important; } body.signin .powered { color: #666666; } body.signin .brandmark b { color: #333333; }
+      body.signin .card { border: 1px solid #e1e4dc; } body.signin .fine { color: #666666; }
+      .tabs .promo a { color: #14240a; font-weight: 700; } .promo .sep { background: #14240a; }
+      .preview-ribbon, .preview-ribbon a { color: #14240a !important; }
+      .brandbar img { height: 40px; } .signin .brandmark img, .brandmark img { height: 76px; }`,
+  },
+  m034: {
+    mockup: true, lookOnly: true, title: "034Motorsport", site: "https://www.034motorsport.com",
+    logo: "https://www.034motorsport.com/media/fishpig/webp/logo/stores/1/034motorsport_logo_medium.webp",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Open+Sans:wght@400;600;700",
+    partner: { ...base("034Motorsport", "034Motorsport"), id: "m034", storageKey: "m034",
+      contact: { website: "https://www.034motorsport.com", info: "contact@034motorsport.com" },
+      promo: { items: [{ name: "Dynamic+ flex fuel tuning", url: "https://www.034motorsport.com", models: ["grc"] }, { name: "034Motorsport performance parts", url: "https://www.034motorsport.com", models: ["grc"] }] } },
+    css: `:root { --bg: #ffffff; --surface: #ffffff; --sunken: #f0f0f0; --ink: #333333; --muted: #5f5f5f; --line: #dddddd; --accent: #000000; --accent-ink: #fff200; --accent-text: #006bb4; --highlight: #fff9a6;
+        --go: #000000; --go-ink: #fff200; --go-edge: #000000; --readout: #000000; --readout-ink: #fff200; --brand: #fff200; --promo-bg: #fff200;
+        --display: "Open Sans", "Segoe UI", sans-serif; --body: "Open Sans", "Segoe UI", sans-serif; }
+      .brandbar { background: #000000; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 8px 16px; border: 0; } .brandbar span { color: #d0d0d0; }
+      .tabs .promo a { color: #000000; font-weight: 600; } .promo .sep { background: #000000; }
+      .preview-ribbon, .preview-ribbon a { color: #000000 !important; }
+      .brandbar img { height: 30px; } .signin .brandmark img, .brandmark img { height: 46px; }`,
+  },
+  zzp: {
+    mockup: true, lookOnly: true, title: "ZZPerformance", site: "https://zzperformance.com",
+    logo: "https://zzperformance.com/cdn/shop/files/zzp-sh-PIRUL.png?v=1676559426&width=400",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Francois+One&family=Open+Sans:wght@400;600;700",
+    partner: { ...base("ZZPerformance", "ZZPerformance"), id: "zzp", storageKey: "zzp",
+      contact: { website: "https://zzperformance.com", info: "customerservice@zzperformance.com" },
+      promo: { items: [{ name: "ZZP flex fuel kits", url: "https://zzperformance.com", models: ["grc"] }, { name: "ZZP intercoolers and downpipes", url: "https://zzperformance.com", models: ["grc"] }] } },
+    css: `:root { --bg: #f5f5f5; --surface: #ffffff; --sunken: #ebebeb; --ink: #000000; --muted: #555555; --line: #dcdcdc; --accent: #000000; --accent-ink: #ffffff; --accent-text: #000000; --highlight: #e4e4e4;
+        --go: #000000; --go-ink: #ffffff; --go-edge: #000000; --readout: #111111; --readout-ink: #ffffff; --brand: #000000; --promo-bg: #000000;
+        --display: "Francois One", "Arial Narrow", sans-serif; --body: "Open Sans", "Segoe UI", sans-serif; }
+      h1, h2, .btn.primary { text-transform: uppercase; letter-spacing: .02em; font-weight: 400; }
+      .brandbar { background: #000000; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 12px 16px; border: 0; } .brandbar span { color: #d0d0d0; }
+      .preview-ribbon { background: #333333 !important; }
+      .brandbar img { height: 16px; } .signin .brandmark img, .brandmark img { height: 24px; }`,
+  },
 };
