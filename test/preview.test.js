@@ -146,6 +146,7 @@ const W = path.resolve(__dirname, "..");
   // 11 Sign out starts over too; nothing left the page; no errors or sideways scrolling
   await go("more", "text=Signed in as");
   log("11 more:", (await text()).slice(0, 200));
+  expect(await page.getAttribute("nav[aria-label=More] a.item:has-text('How to use the app')", "href") === "https://www.youtube.com/shorts/j4VIa6ebGZo", "the preview's More should link the how-to video");
   await page.click("[data-act=signOut]"); await page.waitForSelector("[data-act=previewStart]");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   log("   requests outside the page:", outside.length ? outside : "none", "| overflow:", overflow, "| errors:", errors.length ? errors : "none");

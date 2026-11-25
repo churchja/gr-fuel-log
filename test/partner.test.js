@@ -104,7 +104,9 @@ const W = path.resolve(__dirname, "..");
   // More names the About page for LIMIT+1
   await page.evaluate(() => { location.hash = "more"; }); await page.waitForSelector("text=Signed in as");
   expect(/About and contact/.test(await text()), "More should list About and contact");
-  expect(!(await page.locator("a.item:has-text('How to use the app')").count()), "LIMIT+1's More shouldn't link GR Fuel Log's how-to video");
+  const howTo = await page.locator("nav[aria-label=More] a.item:has-text('How to use the app')").evaluate((a) => ({ href: a.href, target: a.target, rel: a.rel }));
+  log("7b how-to link:", JSON.stringify(howTo));
+  expect(howTo.href === "https://www.youtube.com/shorts/j4VIa6ebGZo" && howTo.target === "_blank" && howTo.rel === "noopener", "LIMIT+1's More should link the how-to video in a new tab");
   // Admin: requests to use the partner version, with Approve
   await page.evaluate(() => { window.__partnerList = [{ user_id: "u-kevin", partner: "limitplus1", partner_name: "LIMIT+1 Flex Fuel", status: "pending", requested_at: "2026-11-25T15:00:00Z", email: "kevin@example.com", handle: null }]; location.hash = "admin"; });
   await page.waitForSelector("text=Partner versions · 1 waiting");

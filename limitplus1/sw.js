@@ -1,6 +1,6 @@
 // Keeps the LIMIT+1 Flex Fuel shell available offline, like GR Fuel Log's own sw.js. Data always comes from the network.
-const CACHE = "lp1-flex-fuel-v36-1";
-const SHELL = ["./", "index.html", "partner.css?v=1", "partner.js?v=1", "manifest.webmanifest", "logo-black.png", "logo-white.png", "icon-192.png",
+const CACHE = "lp1-flex-fuel-v36-2";
+const SHELL = ["./", "index.html", "partner.css?v=1", "partner.js?v=2", "manifest.webmanifest", "logo-black.png", "logo-white.png", "icon-192.png",
   "../app.css?v=36", "../config.js?v=36", "../calc.js?v=36", "../service.js?v=36", "../app.js?v=36",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });

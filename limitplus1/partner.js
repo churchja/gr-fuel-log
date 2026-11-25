@@ -9,6 +9,9 @@ window.PARTNER = {
   tagline: "Exactly how much E85 to pump for your LIMIT+1 flex fuel kit and tune, a fill log that learns your station's real E85, and service reminders for your car.",
   logo: { light: "logo-black.png", dark: "logo-white.png", alt: "LIMIT+1" },
   storageKey: "lp1",                // its own sign-in on the phone, separate from GR Fuel Log's
+  // The how-to video linked from More. For now this is GR Fuel Log's own video (same steps, GR Fuel Log's look);
+  // swap in a LIMIT+1 one when there is one, or delete the line to show no link.
+  howTo: "https://www.youtube.com/shorts/j4VIa6ebGZo",
 
   // Cars LIMIT+1 sells flex fuel kits and tunes for. The GR86 / BRZ uses Toyota's GR86 service schedule.
   models: [{ id: "grc", name: "GR Corolla" }, { id: "gr86", name: "GR86 / BRZ" }, { id: "supra", name: "GR Supra", soon: true }],

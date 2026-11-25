@@ -112,7 +112,7 @@ The file holds members' email addresses and fill history; keep it private.
 
 A partner version is a folder with its own `index.html`, `partner.js`, `partner.css`, icons, manifest and `sw.js`,
 loading the shared `app.js`, `calc.js` and `service.js`. `partner.js` sets `window.PARTNER`: name, logo, the cars
-offered, package presets, contact details and the promo bar. Every account must be approved for the partner in Admin
+offered, package presets, contact details, the promo bar and the how-to video linked from More (`howTo`). Every account must be approved for the partner in Admin
 (`public.partner_access`); requests are emailed to the app's own address. When the shared files' `?v=` number changes,
 change it in the partner's `index.html` and `sw.js` too, and in `limitplus1/preview/index.html`.
 
