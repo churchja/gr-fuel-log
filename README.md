@@ -8,7 +8,8 @@ Live at https://fuel.shadyacres.my.
 | Path | What it is |
 | --- | --- |
 | `index.html`, `app.css`, `app.js` | The app: plain HTML, CSS and JavaScript, no build step |
-| `calc.js` | Blend math, history, oil status and receipt text parsing (shared by the app and tests) |
+| `calc.js` | Blend math, history and receipt text parsing (shared by the app and tests) |
+| `service.js` | Cars and service schedules by model year, from Toyota's maintenance guides, and where each reminder stands (shared by the app and tests) |
 | `config.js` | Public settings: Supabase URL, publishable key, Turnstile site key. No secrets. |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Install-to-home-screen and offline support |
 | `supabase/functions/` | Server functions: `read-receipt` (Claude Haiku 5.5), `notify` (Fastmail warnings), `learn` (the model) |

@@ -9,7 +9,9 @@
   const FACTORY_FILTER = "Toyota 90915-YZZN1";
   const DEFAULT_SETTINGS = {
     target: 40, tuneLimit: 50, gasGrade: 93, ethanolFree: false, primaryE85: "", primaryGas: "", primaryE85Id: "", primaryGasId: "",
-    oilMiles: 3000, oilMonths: 6, receiptMode: "phone_first", share: true, oilTypes: [], filterTypes: [],
+    // Oil interval: empty means the car's own schedule (service.js); a number is the owner's own interval.
+    oilMiles: null, oilMonths: null, receiptMode: "phone_first", share: true, oilTypes: [], filterTypes: [],
+    model: "", year: null, trans: "",
   };
 
   const num = (v) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -72,7 +74,8 @@
   }
 
   // The pump plan, in flex-sensor reading terms (the number the tune and the gauge use).
-  function plan({ dte, sensor, target, tuneLimit, e85, e85Sd, gasEth, car }) {
+  function plan({ dte, sensor, target, tuneLimit, e85, e85Sd, gasEth, car, tank }) {
+    const TANK = Number(tank) > 0 ? Number(tank) : root.Calc.TANK; // each car's own tank size; the GR Corolla's by default
     const a = car ? Number(car.dte_a) : 0.95, b = car ? Number(car.dte_b) : 20;
     const bias = car && car.bias_basis > 0 ? Number(car.bias) : 0;
     const R = clamp(a + dte / b, 0, TANK), space = TANK - R;

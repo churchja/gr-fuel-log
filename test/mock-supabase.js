@@ -11,6 +11,9 @@
   // A test can start signed in with given settings (an older member's profile) by setting __preset before a reload.
   let preset = null; try { preset = JSON.parse(sessionStorage.getItem("__preset") || "null"); } catch (e) { preset = null; }
   if (preset) db.profiles[0].settings = preset;
+  // ...and with given rows already logged, by setting __presetDb the same way.
+  let presetDb = null; try { presetDb = JSON.parse(sessionStorage.getItem("__presetDb") || "null"); } catch (e) { presetDb = null; }
+  if (presetDb) Object.assign(db, presetDb);
   window.__db = db; window.__calls = [];
   window.__known = [
     { id: "st-speedway", source: "custom", name: "Speedway · Main St", brand: "Speedway", street: "Main St", city: "Evansville", state: "IN", standardized: true, distance_m: 60, members: 4, mine: 0, added_by_you: true, can_rename: true, can_delete: true,

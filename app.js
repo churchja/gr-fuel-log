@@ -1,7 +1,8 @@
 // GR Fuel Log app. Plain JavaScript: renders views from state, talks to Supabase, uses calc.js for the math.
 (function () {
   "use strict";
-  const C = window.Calc, CFG = window.APP_CONFIG;
+  const C = window.Calc, V = window.Service, CFG = window.APP_CONFIG;
+  const P = window.PARTNER || null; // a branded partner version sets this; plain GR Fuel Log leaves it out
   const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
   // ---------- helpers ----------
@@ -10,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 28, APP_DATE = "2026-11-23"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 29, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -30,11 +31,11 @@
 
   // ---------- state ----------
   const S = {
-    ready: false, user: null, profile: null, settings: C.withDefaults({}), fills: [], oil: [], car: null, myStations: [], stations: [], quota: null,
+    ready: false, user: null, profile: null, settings: C.withDefaults({}), fills: [], oil: [], svcLog: [], car: null, myStations: [], stations: [], quota: null,
     community: null, communityDays: 90, admin: null, view: "pump", offline: !navigator.onLine, flash: "",
     pump: { dte: "", sensor: "", which: "primary", other: null },
     known: [], picker: null, loc: null, geoPerm: "unknown", stationId: null, stationDetail: null, pumpSuggest: null,
-    form: null, oilForm: null, carForm: null,
+    form: null, oilForm: null, remForm: null, svc: null, carForm: null,
     signin: { step: "email", email: store.get("last-email") || "", code: "", error: "", busy: false, captcha: "" },
   };
   const isAdmin = () => !!(S.profile && S.profile.is_admin);
@@ -56,13 +57,15 @@
     ]);
     S.profile = p.data || null;
     S.settings = C.withDefaults(S.profile && S.profile.settings);
-    S.fills = f.data || []; S.oil = o.data || []; S.car = c.data || null; S.myStations = ms.data || []; S.stations = st.data || []; S.quota = q.data || null; S.known = kn.data || [];
+    S.fills = f.data || []; setSvcLog(o.data || []); S.car = c.data || null; S.myStations = ms.data || []; S.stations = st.data || []; S.quota = q.data || null; S.known = kn.data || [];
     if (S.pump.sensor === "") { const last = C.deriveRows(S.fills, S.settings).slice(-1)[0]; if (last && last.blend !== null) S.pump.sensor = String(Math.round(last.blend)); }
   }
   async function reloadFills() {
     const [f, o] = await Promise.all([sb.from("fills").select("*").order("date").order("odometer"), sb.from("oil_changes").select("*").order("date")]);
-    S.fills = f.data || S.fills; S.oil = o.data || S.oil;
+    S.fills = f.data || S.fills; if (o.data) setSvcLog(o.data);
   }
+  // Every logged service sits in one list; oil changes are the entries marked "oil".
+  function setSvcLog(rows) { S.svcLog = rows; S.oil = rows.filter((x) => (x.item || "oil") === "oil"); }
   // The learn function runs a moment after each change; pick up what it learned.
   function refreshLearning(delay = 5000) {
     setTimeout(async () => {
@@ -74,10 +77,11 @@
   async function refreshQuota() { const q = await sb.rpc("receipt_quota"); if (q.data) S.quota = q.data; }
 
   // ---------- routing ----------
-  const VIEWS = ["pump", "log", "history", "community", "more", "oil", "learned", "car", "about", "admin", "station"];
+  const VIEWS = ["pump", "log", "history", "community", "more", "service", "learned", "car", "about", "admin", "station"];
   function go(view) { if (location.hash !== "#" + view) location.hash = view; else { S.view = view; render(); } }
   function route() {
     let v = location.hash.replace("#", "") || "pump";
+    if (v === "oil") v = "service"; // the old name for the Service page
     if (!VIEWS.includes(v)) v = "pump";
     if (v === "admin" && !isAdmin()) v = "more";
     if (v === "station" && !S.stationId) v = "community";
@@ -87,6 +91,7 @@
     if (v === "about") loadSummary();
     if (v === "admin") loadAdmin();
     if (v === "car") S.carForm = null;
+    if (v !== "service") { S.svc = null; S.oilForm = null; S.remForm = null; }
     if (v === "station" && !S.stationDetail) loadStation();
     if (v === "pump" && approved()) maybeSuggest();
     render();
@@ -104,7 +109,7 @@
     else if (S.profile.status !== "approved") html = vPending();
     else if (S.picker) html = vPicker();
     else if (needsSetup()) html = vCar(true);
-    else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, oil: vOil, learned: vLearned, car: () => vCar(false), about: vAbout, admin: vAdmin, station: vStation }[S.view])();
+    else html = banners() + ({ pump: vPump, log: vLog, history: vHistory, community: vCommunity, more: vMore, service: vService, learned: vLearned, car: () => vCar(false), about: vAbout, admin: vAdmin, station: vStation }[S.view])();
     document.body.classList.toggle("signin", !S.user || (S.profile && S.profile.status !== "approved"));
     app.innerHTML = html;
     $("#tabs").hidden = !(S.user && approved() && !needsSetup() && !S.picker);
@@ -120,12 +125,9 @@
   function banners() {
     const out = [];
     if (S.offline) out.push(`<div class="banner info">You're offline. The pump plan still works; saving waits for a connection.</div>`);
-    if (S.flash) { out.push(`<div class="banner info" role="status">${esc(S.flash)}</div>`); S.flash = ""; }
-    const os = C.oilStatus(S.oil, S.fills, S.settings, today());
-    if (os.last && os.level !== "ok" && S.view !== "oil") {
-      const txt = os.level === "due" ? `Oil change due now${os.milesLeft <= 0 ? `: ${miles(-os.milesLeft)} miles over` : ""}.` : `Oil change coming due: ${miles(Math.max(0, os.milesLeft))} miles or ${Math.max(0, os.daysLeft)} days left.`;
-      out.push(`<div class="banner ${os.level === "due" ? "bad" : "warn"}"><span>${txt}</span><a href="#oil" class="link">View</a></div>`);
-    }
+    // Confirmations show in the bottom bar only, so the page doesn't jump. An Undo already showing stays.
+    if (S.flash) { const el = $("#toast"); if (!(el && !el.hidden && toast.fn)) toast(S.flash); S.flash = ""; }
+    if (S.view === "pump") out.push(afterAskHtml(), serviceNoteHtml());
     return out.join("");
   }
 
@@ -212,9 +214,7 @@
             <button type="button" data-act="which" data-w="primary" aria-pressed="${S.pump.which === "primary"}">${s.primaryE85 ? esc(s.primaryE85) : "Choose primary station"}</button>
             <button type="button" data-act="which" data-w="other" aria-pressed="${S.pump.which === "other"}">${S.pump.other ? esc(S.pump.other.name) : "Other station"}</button>
           </div>
-          ${S.pumpConfirm ? (() => { const n = S.pumpConfirm === "primary" ? s.primaryE85 : S.pump.other ? S.pump.other.name : ""; return `<div class="confirm" role="alert"><span class="grow">Remove ${esc(n)} ${S.pumpConfirm === "primary" ? "as your primary E85 station" : "from this plan"}? You'll choose a station again.</span><button type="button" class="btn danger" data-act="pumpRemove">Remove</button><button type="button" class="btn" data-act="pumpKeep">Keep</button></div>`; })()
-            : s.primaryE85 || S.pump.other ? `<p class="small muted">Double-tap a station to remove it.</p>` : ""}
-          ${S.pump.which === "other" ? `<button type="button" class="link" data-act="pickOther" style="justify-self:start">${S.pump.other ? "Change station" : "Choose the station"}</button>` : ""}
+          ${S.pump.which === "other" ? `<div class="row"><button type="button" class="link" data-act="pickOther">${S.pump.other ? "Change station" : "Choose the station"}</button>${S.pump.other ? `<button type="button" class="link" data-act="pumpRemove">Remove</button>` : ""}</div>` : ""}
           ${unmatchedHtml(s)}</div>
         <p class="small muted">Gas: ${esc(s.primaryGas || "your gas station")} · ${s.ethanolFree ? "ethanol-free " : ""}${s.gasGrade} octane (E${C.gasEthanol(s)})</p>
       </section>
@@ -223,11 +223,32 @@
       <div id="planWarn" class="gap"></div>
       <button class="btn primary full" id="logPlan" data-act="logPlan" disabled>Log this fill</button>`;
   }
+  // The app learns from the sensor reading after a fill, once the gauge settles. Ask for it on the pump screen.
+  function pendingAfter() {
+    const f = S.fills[S.fills.length - 1];
+    if (!f || num(f.sensor_after) !== null || store.get("skip-after") === f.id) return null;
+    return (Date.parse(today()) - Date.parse(f.date)) / 86400000 <= 10 ? f : null;
+  }
+  function afterAskHtml() {
+    const f = pendingAfter();
+    if (!f) return "";
+    return `<form class="banner info after-ask" data-form="saveAfter" novalidate><label for="afterNow" class="grow">Gauge settled? Add the flex sensor reading from your ${fmtShort(f.date)} fill.</label>
+      <span class="row" style="flex-wrap:nowrap"><input id="afterNow" type="number" inputmode="decimal" min="0" max="100" placeholder="%" aria-label="Flex sensor reading, percent"><button class="btn" type="submit">Save</button><button type="button" class="link" data-act="skipAfter">Skip</button></span></form>`;
+  }
+  async function saveAfter() {
+    const f = pendingAfter(), el = $("#afterNow"), v = el ? num(el.value) : null;
+    if (!f) return;
+    if (v === null || v < 0 || v > 100) { toast("Enter the sensor reading, from 0 to 100."); return; }
+    const { error } = await sb.from("fills").update({ sensor_after: v }).eq("id", f.id);
+    if (error) { toast(S.offline ? "You're offline. Save again once you have a signal." : "Couldn't save. Check your connection and try again."); return; }
+    S.pump.sensor = String(v); S.flash = "Reading saved. The app is learning from it now.";
+    await reloadFills(); refreshLearning(); render();
+  }
   function currentPlan() {
     const s = S.settings, dte = num(S.pump.dte), sensor = num(S.pump.sensor);
     const as = C.e85Assumption({ which: S.pump.which, other: S.pump.other, settings: s, myStations: S.myStations, stations: S.stations, car: S.car, today: today() });
     if (dte === null || sensor === null || dte < 0 || sensor < 0 || sensor > 100) return { as, p: null };
-    const p = C.plan({ dte, sensor, target: s.target, tuneLimit: s.tuneLimit, e85: as.value, e85Sd: as.sd, gasEth: C.gasEthanol(s), car: S.car });
+    const p = C.plan({ dte, sensor, target: s.target, tuneLimit: s.tuneLimit, e85: as.value, e85Sd: as.sd, gasEth: C.gasEthanol(s), car: S.car, tank: V.tank(carModel()) });
     return { as, p, dte, sensor };
   }
   function renderReadout() {
@@ -336,7 +357,6 @@
         </section>
         <section class="card">
           <div class="head"><h2>Pump stops</h2><span class="small muted">${S.settings.receiptMode === "off" ? "" : "Photos are read, then discarded"}</span></div>
-          <p class="small muted">Double-tap a stop's title, or tap Remove, to delete it.</p>
           <div id="stops" class="gap">${f.stops.map(stopHtml).join("")}</div>
           <button type="button" class="btn" data-act="addStop">Add a pump stop</button>
         </section>
@@ -359,12 +379,12 @@
     const quota = S.quota ? Math.max(0, S.quota.daily_limit - S.quota.used_today) : null;
     const claudeOk = mode !== "phone" && mode !== "off";
     return `<div class="stop" data-i="${i}">
-      <div class="head stop-head" data-act="stopTap" data-i="${i}"><b>Stop ${i + 1}</b><button type="button" class="link" data-act="askRemoveStop" data-i="${i}">Remove</button></div>
+      <div class="head stop-head"><b>Stop ${i + 1}</b><button type="button" class="link" data-act="askRemoveStop" data-i="${i}">Remove</button></div>
       ${S.form.confirmStop === i ? (() => { const g = num(st.gallons), t = num(st.total) ?? (g !== null && num(st.price) !== null ? g * num(st.price) : null); const what = [g !== null ? `${g.toFixed(2)} gal` : "", t !== null ? money(t) : ""].filter(Boolean).join(", ");
         return `<div class="confirm" role="alert"><span class="grow">Delete stop ${i + 1}${what ? ` (${what})` : ""}?</span><button type="button" class="btn danger" data-act="removeStop" data-i="${i}">Delete</button><button type="button" class="btn" data-act="keepStop">Keep</button></div>`; })() : ""}
       <div class="seg" role="group" aria-label="Fuel for stop ${i + 1}">${kinds.map(([k, l]) => `<button type="button" data-act="stopKind" data-i="${i}" data-k="${k}" aria-pressed="${st.kind === k}">${esc(l)}</button>`).join("")}</div>
-      ${st.kind === "gas" ? `<div class="grid2"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${C.GRADES.map((g) => `<option value="${g}" ${Number(st.grade) === g ? "selected" : ""}>${g} octane</option>`).join("")}</select></label>
-        <label class="field" for="ge${i}">Ethanol %<input id="ge${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" placeholder="${C.gasEthanol(s, st.grade)}"></label></div>` : ""}
+      ${st.kind === "gas" ? `<div class="${num(st.ethanol) !== null ? "grid2" : "stack"}"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${C.GRADES.map((g) => `<option value="${g}" ${Number(st.grade) === g ? "selected" : ""}>${g} octane</option>`).join("")}</select></label>
+        ${num(st.ethanol) !== null ? `<label class="field" for="ge${i}">Ethanol %<input id="ge${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" placeholder="${C.gasEthanol(s, st.grade)}"></label>` : ""}</div>` : ""}
       ${st.kind === "other" ? `<div class="grid2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)"><label class="field" for="fn${i}">What fuel<input id="fn${i}" type="text" data-s="fuelName" data-i="${i}" value="${esc(st.fuelName)}" placeholder="Race fuel, blender pump E30…"></label>
         <label class="field" for="oe${i}">Ethanol %<input id="oe${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" class="${hl("ethanol")}"></label></div>
         <p class="note">For ethanol-free gas, race fuel, a blender pump or any blend that isn't your usual. The math uses the ethanol % you enter.</p>` : ""}
@@ -416,14 +436,18 @@
     if (stops.some((s) => s.gallons === null || s.gallons < 0)) return fail("Every pump stop needs its gallons.");
     if (stops.some((s) => s.kind === "other" && (s.ethanol === null || s.ethanol < 0 || s.ethanol > 100))) return fail("Enter the ethanol % for each Other fuel stop.");
     const gallons = stops.reduce((a, s) => a + s.gallons, 0);
-    if (gallons > C.TANK + 1) return fail(`That's ${gallons.toFixed(2)} gal, more than the ${C.TANK} gal tank holds. Check the gallons.`);
+    const tank = V.tank(carModel());
+    if (gallons > tank + 1) return fail(`That's ${gallons.toFixed(2)} gal, more than the ${tank} gal tank holds. Check the gallons.`);
     for (const [k, label] of [["sensor_before", "The before reading"], ["sensor_after", "The after reading"]]) { const v = num(f[k]); if (v !== null && (v < 0 || v > 100)) return fail(`${label} must be between 0 and 100.`); }
     const row = { date: f.date, odometer: odo, dte: num(f.dte), sensor_before: num(f.sensor_before), sensor_after: num(f.sensor_after), full: !!f.full,
       target: num(f.target), stops, plan: f.plan, notes: String(f.notes || "").trim() || null };
     const res = f.id ? await sb.from("fills").update(row).eq("id", f.id) : await sb.from("fills").insert(row);
     if (res.error) return fail(S.offline ? "You're offline. Save again once you have a signal." : "Couldn't save. Check your connection and try again.");
     S.form = null; S.flash = f.id ? "Fill updated." : "Fill saved. The app is learning from it now.";
-    await reloadFills(); refreshLearning(); go("history");
+    await reloadFills();
+    // Service reminders count from the first odometer reading the app has for this car.
+    if (odo && num(S.settings.serviceStart) === null) await saveSettings({ ...S.settings, serviceStart: odo });
+    refreshLearning(); go("history");
   }
 
   // ---------- receipt reading ----------
@@ -569,18 +593,19 @@
     const stationList = `<section class="card list"><h2 style="padding-top:10px">Stations members use</h2>${known.length ? shown.map((k) => stationRow(k, "openStation")).join("") : `<p class="small muted" style="padding-bottom:10px">Stations show up here once a member logs a fill there.</p>`}
       ${known.length > shown.length ? `<button type="button" class="link" data-act="allStations" style="padding-bottom:12px">Show all ${known.length}</button>` : ""}</section>`;
     return head + stationList + `<section class="dark"><h2>Real E85 strength by station</h2>${stations}<p class="small dim">Bar runs from E50 to E85. Grey tick: the reading before the last blend switch.</p></section>
-      <section class="card"><h2>Cost per mile by blend</h2>${blends}</section>
-      <section class="card"><h2>Cost per mile by gas grade</h2>${grades}${c.on_target !== null && c.on_target !== undefined ? `<p><b>${c.on_target}%</b> of shared fills landed within 3 points of their owner's target.</p>` : ""}</section>
+      ${S.moreNumbers ? `<section class="card"><h2>Cost per mile by blend</h2>${blends}</section>
+      <section class="card"><h2>Cost per mile by gas grade</h2>${grades}${c.on_target !== null && c.on_target !== undefined ? `<p><b>${c.on_target}%</b> of shared fills landed within 3 points of their owner's target.</p>` : ""}</section>`
+        : `<button type="button" class="link" data-act="moreNumbers" style="justify-self:start">More numbers: cost per mile by blend and gas grade</button>`}
       <section class="card" style="background:var(--sunken)"><p class="small"><b>${S.settings.share ? "Your fills are shared." : "Your fills are private."}</b> Only the month, station, blend, E85 strength, mpg, cost per mile and pump prices leave a log. Stations show their name and address, but never who fills there.</p><a href="#car" class="link">Change sharing</a></section>`;
   }
 
   // ---------- more, oil, learned ----------
   function vMore() {
-    const os = C.oilStatus(S.oil, S.fills, S.settings, today());
+    const next = V.sortRows(serviceState().rows).filter((r) => r.level !== "off")[0];
     const items = [
-      ["oil", "Oil changes", os.last ? `Next due at ${miles(os.dueMiles)} mi or ${fmtShort(os.dueDate)}` : "Log your last oil change to start reminders", os.last && os.level !== "ok" ? `<span class="chip ${os.level}">${os.level === "due" ? "Due now" : "Due soon"}</span>` : ""],
+      ["service", "Service", next && next.dueMiles !== null ? `Next: ${next.name}. ${dueTxt(next)}` : "Oil changes and scheduled service reminders", next ? svcChip(next) : ""],
       ["learned", "What the app has learned", "E85 strength, your sensor, fuel left, accuracy", ""],
-      ["car", "Your car and settings", "Target, tune limit, gas, receipts, sharing", ""],
+      ["car", "Your car and settings", "Model year, target, tune limit, gas, receipts, sharing", ""],
       ["about", "About and disclaimer", "What the app is and where its data comes from", ""],
     ];
     if (isAdmin()) items.push(["admin", "Admin", "Sign-ups, warnings, receipt budget", ""]);
@@ -588,55 +613,141 @@
       <nav class="card list" aria-label="More">${items.map(([href, t, d, badge]) => `<a class="item" href="#${href}" style="grid-template-columns:minmax(0,1fr) auto auto;align-items:center"><span class="stack"><span class="t">${t}</span><span class="d">${esc(d)}</span></span>${badge || "<span></span>"}${icon("chevron", 18)}</a>`).join("")}</nav>
       <button class="btn full" data-act="signOut">Sign out</button>`;
   }
+  // ---------- service ----------
+  // Which car this is. GR Fuel Log is for the GR Corolla; a partner version lets the owner choose.
+  const carModel = () => S.settings.model || (P && P.models ? "" : "grc");
+  const carName = () => { const c = V.CARS[carModel()]; return c ? c.name : "car"; };
+  const odoNow = () => Math.max(0, ...S.fills.map((f) => Number(f.odometer) || 0), ...S.svcLog.map((o) => Number(o.odometer) || 0));
+  // Every reminder for this car and where it stands. Until the model year is known, only the oil change shows.
+  function serviceState() {
+    const s = S.settings, model = carModel(), info = V.resolve(model, s.year, s.trans);
+    const list = s.year && info.car ? V.items(model, s.year, s.trans) : [V.oilItem(model)];
+    const overrides = { ...(s.service || {}) };
+    if (num(s.oilMiles) !== null || num(s.oilMonths) !== null) overrides.oil = { ...(overrides.oil || {}), miles: s.oilMiles, months: s.oilMonths };
+    const odo = odoNow();
+    // Counting starts at the odometer the app first knew; until that's saved, count from where the car is now.
+    return { info, odo, rows: V.status(list, S.svcLog, odo, today(), { start: num(s.serviceStart) ?? (odo || null), overrides }) };
+  }
+  function dueTxt(r) {
+    if (r.level === "off") return "Reminder off";
+    if (r.dueMiles === null) return "Starts counting after your first fill";
+    if (r.level === "due") return r.milesLeft !== null && r.milesLeft < 0 ? `Due now, ${miles(-r.milesLeft)} miles over` : r.daysLeft !== null && r.daysLeft < 0 ? `Due now, ${-r.daysLeft} days over` : "Due now";
+    const byDays = r.daysLeft !== null && (r.milesLeft === null || r.daysLeft / 30 < r.milesLeft / 1000);
+    return r.level === "soon" ? (byDays ? `Due in ${r.daysLeft} days` : `Due in ${miles(Math.max(0, r.milesLeft))} miles`)
+      : `Due at ${miles(r.dueMiles)} mi${r.dueDate ? ` or ${fmtDate(r.dueDate)}` : ""}`;
+  }
+  const svcChip = (r) => (r.level === "due" ? `<span class="chip due">Due now</span>` : r.level === "soon" ? `<span class="chip soon">Due soon</span>` : r.level === "off" ? `<span class="chip none">Off</span>` : "");
+  // The note on the pump screen: the most pressing service, with Done and Later.
+  function serviceNoteHtml() {
+    const nag = V.nagging(serviceState().rows, today());
+    if (!nag.length) return "";
+    const r = nag[0], more = nag.length - 1;
+    return `<div class="banner ${r.level === "due" ? "bad" : "warn"} svc-note"><span class="grow"><b>${esc(r.name)}.</b> ${esc(dueTxt(r))}.${more ? ` <a href="#service" class="link">${more} more</a>` : ""}</span>
+      <button type="button" class="link" data-act="svcDone" data-k="${r.key}">Done</button><button type="button" class="link" data-act="svcLater" data-k="${r.key}">Later</button></div>`;
+  }
   function oilChoices() {
     const mine = [...new Set([...(S.settings.oilTypes || []), ...S.oil.map((o) => o.oil_type)].filter(Boolean))];
     return { mine: mine.filter((o) => !C.COMMON_OILS.includes(o)), common: C.COMMON_OILS };
   }
-  function vOil() {
-    const os = C.oilStatus(S.oil, S.fills, S.settings, today());
-    const f = S.oilForm || (S.oilForm = { id: null, date: today(), odometer: os.odoNow ? String(os.odoNow) : "", oil: (S.oil.slice(-1)[0] || {}).oil_type || "", filter: (S.oil.slice(-1)[0] || {}).filter_type || C.FACTORY_FILTER, notes: "", customOil: false, customFilter: false, error: "", confirmDelete: false });
-    const { mine, common } = oilChoices();
+  function newSvcForm(key) {
+    const lastOil = S.oil.slice(-1)[0] || {}, odo = odoNow();
+    return { id: null, item: key, date: today(), odometer: odo ? String(odo) : "", oil: lastOil.oil_type || "", filter: lastOil.filter_type || C.FACTORY_FILTER, notes: "", customOil: false, customFilter: false, error: "", confirmDelete: false };
+  }
+  const logLine = (o, names) => `<button type="button" class="item" data-act="editOil" data-id="${esc(o.id)}"><span class="t">${names ? esc(names[o.item || "oil"] || "Service") : fmtDate(o.date)}</span><span class="r muted">${miles(o.odometer)} mi</span>
+    <span class="d">${names ? fmtDate(o.date) + (o.oil_type ? " · " + esc(o.oil_type) : "") : esc((o.item || "oil") === "oil" ? (o.oil_type || "Oil not recorded") + (o.filter_type ? " · " + o.filter_type : "") : o.notes || "Done")}</span><span></span></button>`;
+  function vService() {
+    const s = S.settings, { info, rows } = serviceState();
+    if (S.svc) { const r = rows.find((x) => x.key === S.svc.key); if (r) return vServiceItem(r); S.svc = null; }
+    const names = Object.fromEntries(rows.map((r) => [r.key, r.name]));
+    const source = s.year && info.car ? `<p class="small muted">${info.checked ? `From Toyota's ${info.year} ${esc(info.name)} maintenance guide, checked ${fmtDate(info.checkedOn)}.`
+      : `Toyota's ${info.year} ${esc(info.name)} guide hasn't been checked yet, so this uses the ${info.usedYear} schedule.`} <a href="${esc(info.guide)}" target="_blank" rel="noopener">Open the guide</a></p>`
+      : `<div class="banner info"><span class="grow">Add your model year to see the full service schedule for your ${esc(carName())}.</span><a href="#car" class="link">Add it</a></div>`;
+    const needTrans = s.year && info.car && !info.trans ? `<div class="banner info"><span class="grow">Choose manual or automatic to see the transmission service.</span><a href="#car" class="link">Choose</a></div>` : "";
+    const list = V.sortRows(rows).map((r) => `<button type="button" class="item" data-act="svcOpen" data-k="${r.key}"><span class="t">${esc(r.name)}</span><span class="r">${svcChip(r)}</span>
+        <span class="d">${esc(r.level === "due" || r.level === "soon" ? dueTxt(r) + (r.dueMiles !== null ? ` · at ${miles(r.dueMiles)} mi` : "") : dueTxt(r))}${r.practice ? " · owner practice" : ""}</span><span></span></button>`).join("");
+    const log = [...S.svcLog].sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.odometer) - Number(a.odometer));
+    return `<div class="stack"><h1>Service</h1><p class="muted">Reminders for your ${s.year ? s.year + " " : ""}${esc(carName())}. Tap one to mark it done or change it.</p></div>
+      ${source}${needTrans}
+      <section class="card list">${list}</section>
+      ${log.length ? `<h2>Done so far</h2><section class="card list">${log.map((o) => logLine(o, names)).join("")}</section>` : ""}`;
+  }
+  // One service: where it stands, mark it done, and its reminder.
+  function vServiceItem(r) {
+    const f = S.oilForm && S.oilForm.item === r.key ? S.oilForm : (S.oilForm = newSvcForm(r.key));
+    const rem = S.remForm && S.remForm.key === r.key ? S.remForm : (S.remForm = { key: r.key, on: r.level !== "off", miles: String(r.miles), months: String(r.months), error: "" });
+    const isOil = r.key === "oil", { mine, common } = oilChoices();
     const filters = [...new Set([C.FACTORY_FILTER, ...(S.settings.filterTypes || []), ...S.oil.map((o) => o.filter_type)].filter(Boolean))];
-    const status = os.last ? `<section class="dark"><div class="head"><h2>Next oil change</h2><span class="chip ${os.level === "ok" ? "on" : os.level}">${os.level === "due" ? "Due now" : os.level === "soon" ? "Due soon" : "OK"}</span></div>
-        <div class="grid2"><div class="stack"><span class="big" style="font:700 30px/1 var(--display)">${os.milesLeft >= 0 ? miles(os.milesLeft) + " mi" : miles(-os.milesLeft) + " mi over"}</span><span class="small soft">due at ${miles(os.dueMiles)}</span></div>
-        <div class="stack"><span class="big" style="font:700 30px/1 var(--display)">${os.daysLeft >= 0 ? os.daysLeft + " days" : -os.daysLeft + " days over"}</span><span class="small soft">due ${fmtDate(os.dueDate)}</span></div></div>
-        <p class="small soft">Every ${miles(S.settings.oilMiles)} miles or ${S.settings.oilMonths} months, whichever comes first.</p></section>`
-      : `<section class="card"><h2>Next oil change</h2><p class="muted">Log your most recent oil change to start reminders.</p></section>`;
     const opt = (v, label = v) => `<option value="${esc(v)}" ${f.oil === v ? "selected" : ""}>${esc(label)}</option>`;
-    return `<h1>Oil changes</h1>${status}
-      <form class="card" data-form="saveOil" novalidate><h2>${f.id ? "Edit oil change" : "Log an oil change"}</h2>
+    const base = V.items(carModel(), S.settings.year, S.settings.trans).find((x) => x.key === r.key) || V.oilItem(carModel());
+    const every = (it) => `every ${miles(it.miles)} miles or ${it.months} months`;
+    const status = r.level === "off" ? `<section class="card"><p class="muted">This reminder is off.</p></section>` : r.dueMiles === null ? `<section class="card"><p class="muted">Starts counting after your first fill, when the app knows your odometer.</p></section>`
+      : `<section class="dark"><div class="head"><h2>Next due</h2>${r.level === "ok" ? `<span class="chip on">OK</span>` : svcChip(r)}</div>
+        <div class="grid2"><div class="stack"><span class="big" style="font:700 30px/1 var(--display)">${r.milesLeft === null ? "—" : r.milesLeft >= 0 ? miles(r.milesLeft) + " mi" : miles(-r.milesLeft) + " mi over"}</span><span class="small soft">due at ${miles(r.dueMiles)}</span></div>
+        ${r.dueDate ? `<div class="stack"><span class="big" style="font:700 30px/1 var(--display)">${r.daysLeft >= 0 ? r.daysLeft + " days" : -r.daysLeft + " days over"}</span><span class="small soft">due ${fmtDate(r.dueDate)}</span></div>` : `<div class="stack"><span class="small soft">${r.last ? "" : "Assumes it was done on schedule before the app started tracking. Mark it done to set the real date."}</span></div>`}</div>
+        <p class="small soft">${every(r)[0].toUpperCase() + every(r).slice(1)}, whichever comes first.</p></section>`;
+    const mineLog = S.svcLog.filter((o) => (o.item || "oil") === r.key).sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.odometer) - Number(a.odometer));
+    return `<header class="head"><h1>${esc(r.name)}</h1><button type="button" class="btn" data-act="svcClose">Back</button></header>
+      ${r.practice || r.note ? `<p class="small muted">${r.practice ? "Owner practice, not required by Toyota. " : ""}${esc(r.note || "")}</p>` : ""}
+      ${status}
+      <form class="card" data-form="saveOil" novalidate><h2>${f.id ? "Edit this entry" : "Mark it done"}</h2>
         <div class="grid2"><label class="field" for="o-date">Date<input id="o-date" type="date" data-o="date" value="${esc(f.date)}"></label>
           <label class="field" for="o-odo">Odometer<input id="o-odo" type="number" inputmode="decimal" data-o="odometer" value="${esc(f.odometer)}"></label></div>
-        <label class="field" for="o-oil">Oil<select id="o-oil" data-o="oil">
+        ${isOil ? `<label class="field" for="o-oil">Oil<select id="o-oil" data-o="oil">
           <option value="" ${!f.oil ? "selected" : ""} disabled>Choose an oil</option>
           ${mine.length ? `<optgroup label="Your oils">${mine.map((o) => opt(o)).join("")}</optgroup>` : ""}
-          <optgroup label="Most used by GR Corolla owners">${common.map((o) => opt(o, o + (o.startsWith("Toyota") ? " (factory fill)" : ""))).join("")}</optgroup>
+          <optgroup label="Most used by owners">${common.map((o) => opt(o, o + (o.startsWith("Toyota") ? " (factory fill)" : ""))).join("")}</optgroup>
           <option value="__custom" ${f.customOil ? "selected" : ""}>Add your own oil…</option></select></label>
         ${f.customOil ? `<label class="field" for="o-oil-own">Your oil<input id="o-oil-own" type="text" data-o="oilOwn" placeholder="Brand and viscosity" value="${esc(f.oilOwn || "")}"></label>` : ""}
-        <p class="small muted">Toyota specifies 0W-20 (ILSAC GF-6A) for the G16E. Heavier oils show up mostly with track use.</p>
         <label class="field" for="o-filter">Filter<select id="o-filter" data-o="filter">${filters.map((x) => `<option value="${esc(x)}" ${f.filter === x ? "selected" : ""}>${esc(x)}${x === C.FACTORY_FILTER ? " (factory)" : ""}</option>`).join("")}<option value="__custom" ${f.customFilter ? "selected" : ""}>Add your own filter…</option></select></label>
-        ${f.customFilter ? `<label class="field" for="o-filter-own">Your filter<input id="o-filter-own" type="text" data-o="filterOwn" placeholder="Brand and part number" value="${esc(f.filterOwn || "")}"></label>` : ""}
+        ${f.customFilter ? `<label class="field" for="o-filter-own">Your filter<input id="o-filter-own" type="text" data-o="filterOwn" placeholder="Brand and part number" value="${esc(f.filterOwn || "")}"></label>` : ""}` : ""}
         <label class="field" for="o-notes">Notes<textarea id="o-notes" rows="2" data-o="notes">${esc(f.notes)}</textarea></label>
         ${f.error ? `<p class="note-err" role="alert">${esc(f.error)}</p>` : ""}
-        <div class="row"><button class="btn primary grow" type="submit">Save oil change</button>${f.id ? `<button type="button" class="btn" data-act="cancelOil">Cancel</button>` : ""}</div>
-        ${f.id ? (f.confirmDelete ? `<div class="confirm"><span class="grow">Delete this oil change?</span><button type="button" class="btn danger" data-act="deleteOil">Delete</button><button type="button" class="btn" data-act="keepOil">Keep it</button></div>` : `<button type="button" class="btn danger" data-act="askDeleteOil">Delete this oil change</button>`) : ""}
+        <div class="row"><button class="btn primary grow" type="submit">${f.id ? "Save changes" : "Save as done"}</button>${f.id ? `<button type="button" class="btn" data-act="cancelOil">Cancel</button>` : ""}</div>
+        ${f.id ? (f.confirmDelete ? `<div class="confirm"><span class="grow">Delete this entry?</span><button type="button" class="btn danger" data-act="deleteOil">Delete</button><button type="button" class="btn" data-act="keepOil">Keep it</button></div>` : `<button type="button" class="btn danger" data-act="askDeleteOil">Delete this entry</button>`) : ""}
       </form>
-      ${S.oil.length ? `<section class="card list">${[...S.oil].reverse().map((o) => `<button type="button" class="item" data-act="editOil" data-id="${esc(o.id)}"><span class="t">${fmtDate(o.date)}</span><span class="r muted">${miles(o.odometer)} mi</span><span class="d">${esc(o.oil_type || "Oil not recorded")}${o.filter_type ? " · " + esc(o.filter_type) : ""}</span><span></span></button>`).join("")}</section>` : ""}`;
+      <form class="card" data-form="saveRem" novalidate><h2>Reminder</h2>
+        <label class="check" for="rem-on"><input id="rem-on" type="checkbox" data-rem="on" ${rem.on ? "checked" : ""}><b>Remind me</b></label>
+        <div class="grid2"><label class="field" for="rem-mi">Every (miles)<input id="rem-mi" type="number" inputmode="numeric" data-rem="miles" value="${esc(rem.miles)}"></label>
+          <label class="field" for="rem-mo">Or every (months)<input id="rem-mo" type="number" inputmode="decimal" data-rem="months" value="${esc(rem.months)}"></label></div>
+        <p class="small muted">${r.practice ? "Owner practice" : "Toyota's schedule"}: ${every(base)}.${r.custom ? " You've set your own." : ""}</p>
+        ${rem.error ? `<p class="note-err" role="alert">${esc(rem.error)}</p>` : ""}
+        <button class="btn" type="submit">Save reminder</button>
+      </form>
+      ${mineLog.length ? `<h2>Done so far</h2><section class="card list">${mineLog.map((o) => logLine(o, null)).join("")}</section>` : ""}`;
   }
   async function saveOil() {
     const f = S.oilForm; f.error = "";
+    const isOil = (f.item || "oil") === "oil";
     const oil = f.customOil ? String(f.oilOwn || "").trim() : f.oil, filter = f.customFilter ? String(f.filterOwn || "").trim() : f.filter;
     if (!/^\d{4}-\d\d-\d\d$/.test(f.date)) { f.error = "Enter the date."; return render(); }
     const odo = num(f.odometer); if (odo === null || odo <= 0) { f.error = "Enter the odometer reading."; return render(); }
-    if (!oil) { f.error = "Choose or add the oil."; return render(); }
-    const row = { date: f.date, odometer: odo, oil_type: oil, filter_type: filter || null, notes: String(f.notes || "").trim() || null };
+    if (isOil && !oil) { f.error = "Choose or add the oil."; return render(); }
+    const row = { item: f.item || "oil", date: f.date, odometer: odo, oil_type: isOil ? oil : null, filter_type: isOil ? filter || null : null, notes: String(f.notes || "").trim() || null };
     const res = f.id ? await sb.from("oil_changes").update(row).eq("id", f.id) : await sb.from("oil_changes").insert(row);
     if (res.error) { f.error = "Couldn't save. Check your connection and try again."; return render(); }
     const s = { ...S.settings };
-    if (f.customOil && !C.COMMON_OILS.includes(oil)) s.oilTypes = [...new Set([...(s.oilTypes || []), oil])];
-    if (f.customFilter && filter) s.filterTypes = [...new Set([...(s.filterTypes || []), filter])];
-    if (f.customOil || f.customFilter) await saveSettings(s);
-    S.oilForm = null; S.flash = "Oil change saved."; await reloadFills(); render();
+    if (isOil && f.customOil && !C.COMMON_OILS.includes(oil)) s.oilTypes = [...new Set([...(s.oilTypes || []), oil])];
+    if (isOil && f.customFilter && filter) s.filterTypes = [...new Set([...(s.filterTypes || []), filter])];
+    // Marking it done ends any "later" on this reminder.
+    if (s.service && s.service[row.item] && s.service[row.item].later) { s.service = { ...s.service, [row.item]: { ...s.service[row.item] } }; delete s.service[row.item].later; }
+    if (JSON.stringify(s) !== JSON.stringify(S.settings)) await saveSettings(s);
+    S.oilForm = null; S.remForm = null; S.svc = null; S.flash = "Saved."; await reloadFills(); render(); window.scrollTo(0, 0);
+  }
+  async function saveRem() {
+    const rem = S.remForm, key = rem.key; rem.error = "";
+    const mi = num(rem.miles), mo = num(rem.months);
+    if (rem.on && (!(mi >= 500 && mi <= 200000) || !(mo >= 1 && mo <= 180))) { rem.error = "Check the miles and months."; return render(); }
+    const base = V.items(carModel(), S.settings.year, S.settings.trans).find((x) => x.key === key) || V.oilItem(carModel());
+    const own = rem.on && (mi !== base.miles || mo !== base.months);
+    const s = { ...S.settings, service: { ...(S.settings.service || {}) } };
+    const entry = { ...(s.service[key] || {}) };
+    delete entry.miles; delete entry.months; delete entry.later;
+    if (rem.on) delete entry.off; else entry.off = true;
+    if (key === "oil") { s.oilMiles = own ? mi : null; s.oilMonths = own ? mo : null; }
+    else if (own) { entry.miles = mi; entry.months = mo; }
+    if (Object.keys(entry).length) s.service[key] = entry; else delete s.service[key];
+    if (!(await saveSettings(s))) { rem.error = "Couldn't save. Check your connection and try again."; return render(); }
+    S.remForm = null; S.flash = rem.on ? "Reminder saved." : "Reminder turned off."; render();
   }
 
   // The station lists update every week; the About page shows the latest of each.
@@ -688,28 +799,55 @@
     return `<div class="stack"><h1>What the app has learned</h1><p class="muted">Updated after every fill. Each number shows how sure the app is.</p></div>
       <section class="dark"><h2>Real E85 strength</h2>${rows || `<p class="soft">No measured fills yet. Log fills with your flex sensor reading before and after.</p>`}<p class="small dim">${regional}</p></section>
       <section class="card"><h2>Your flex sensor</h2>${sensor}</section>
-      <section class="card"><h2>Fuel left at a given DTE</h2><b style="font:700 24px/1.1 var(--display)">${car ? `${Number(car.dte_a).toFixed(2)} + DTE ÷ ${Number(car.dte_b).toFixed(1)}` : "0.95 + DTE ÷ 20"} <span class="small muted" style="font-family:var(--body)">±${car ? Number(car.dte_sd).toFixed(1) : "0.4"} gal</span></b>
-        <p class="small muted">${car && car.dte_n ? `From your last ${car.dte_n} full fills. ` : "Starting formula until your fills refine it. "}Tunes change this curve, so it's learned for your car only.</p></section>
+      <section class="card"><h2>Fuel left when the tank is low</h2>${(() => { const a = car ? Number(car.dte_a) : 0.95, b = car ? Number(car.dte_b) : 20, left = (d) => (a + d / b).toFixed(1);
+        return `<p><b style="font:700 24px/1.1 var(--display)">About ${left(30)} gallons</b> at 30 miles to empty <span class="muted">(±${car ? Number(car.dte_sd).toFixed(1) : "0.4"})</span></p>
+        <p class="small muted">About ${left(0)} gallons are still in the tank when the dash shows 0 miles. ${car && car.dte_n ? `Worked out from your last ${car.dte_n} full fills. ` : "A starting estimate until your fills refine it. "}Tunes change this, so it's learned for your car only.</p>`; })()}</section>
       <section class="card"><h2>Accuracy</h2>${acc}</section>
-      <section class="card"><h2>How it learns</h2><p class="small">Every fill is a measurement. The app weighs each one by how reliable it is, follows each station's E85 as it drifts through the seasons, and spots a blend switch within a fill or two. It separates your sensor's quirks from the fuel by comparing notes with other owners.</p></section>
+      <section class="card"><h2>How it learns</h2><p class="small">Every fill is a measurement. The app follows each station's E85 through the seasons, spots a blend switch within a fill or two, and tells your sensor's quirks apart from the fuel by comparing with other owners.</p></section>
       <section class="card"><h2>Reset learning</h2><p class="small muted">${S.profile.learn_since ? `Learning uses your fills from ${fmtDate(S.profile.learn_since)} on. ` : ""}Starts your car's learning over from today, for example after a new tune or a new flex sensor. Station numbers from the community stay.</p>
         ${S.confirmReset ? `<div class="confirm"><span class="grow">Start your car's learning over from today?</span><button class="btn danger" data-act="resetLearn">Reset</button><button class="btn" data-act="cancelReset">Cancel</button></div>` : `<button class="btn danger" data-act="askReset">Reset my car's learning</button>`}</section>`;
   }
 
   // ---------- your car ----------
   function vCar(first) {
-    const f = S.carForm || (S.carForm = { ...S.settings, tuneLimit: S.settings.tuneLimitNotSure ? "50ns" : S.settings.tuneLimit, handle: S.profile.handle || "", error: "" });
+    const st = S.settings;
+    const f = S.carForm || (S.carForm = { ...st, model: carModel(), year: st.year ? String(st.year) : "", trans: st.trans || "", tuneLimit: st.tuneLimitNotSure ? "50ns" : st.tuneLimit, handle: S.profile.handle || "",
+      receiptOn: st.receiptMode !== "off", pkg: st.pkg || "", forumName: st.forumName || "", instagram: st.instagram || "", error: "" });
     const seg = (key, opts, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([v, l]) => `<button type="button" data-act="set" data-k="${key}" data-v="${v}" aria-pressed="${String(f[key]) === String(v)}">${l}</button>`).join("")}</div>`;
     const mx = C.maxTarget({ tuneLimit: Number(String(f.tuneLimit).replace("ns", "")) });
     const pickField = (label, key, kind, id) => `<div class="field"><span id="${id}-l">${label}</span><button type="button" id="${id}" class="pickbtn" data-act="pickPrimary" data-p="${kind}" aria-labelledby="${id}-l ${id}"><span class="stack" style="gap:2px;min-width:0">${f[key] ? esc(f[key]) : `<span class="muted">Choose station</span>`}${f[key] && !f[key + "Id"] ? `<span class="small muted">Not matched to the shared list yet. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button>${f[key] && !first ? `<button type="button" class="link" data-act="clearPrimary" data-k="${key}" style="justify-self:start">Remove</button>` : ""}</div>`;
-    return `<div class="stack"><h1>${first ? "Set up your car" : "Your car"}</h1><p class="muted">${first ? "A few answers so the pump plan fits your car. You can change any of it later." : "Change any of it here."}</p></div>
-      <form class="gap" data-form="saveCar" novalidate>
-        <section class="card"><h2>Blend</h2>
+    const models = P && P.models ? P.models : null, info = V.resolve(f.model, f.year, f.trans);
+    const soon = models ? models.filter((m) => m.soon).map((m) => m.name) : [];
+    const packs = P && P.packages && P.packages[f.model] ? P.packages[f.model] : null;
+    const car = `<section class="card"><h2>Car</h2>
+          ${models ? `<div class="stack"><b>Model</b>${seg("model", models.filter((m) => !m.soon).map((m) => [m.id, esc(m.name)]), "Model")}${soon.length ? `<span class="small muted">${esc(soon.join(", "))}: coming soon.</span>` : ""}</div>` : ""}
+          ${info.car ? `<div class="stack"><b>Model year</b>${seg("year", V.offeredYears(f.model).map((y) => [y, y]), "Model year")}</div>` : ""}
+          ${info.car && f.year && info.transOptions.length > 1 ? `<div class="stack"><b>Transmission</b>${seg("trans", info.transOptions.map((t) => [t, V.TRANS[t]]), "Transmission")}</div>` : ""}
+          ${packs ? `<div class="stack"><b>${esc(P.packageLabel || "Your package")}</b>${seg("pkg", packs.map((k) => [k.id, esc(k.name)]), "Package")}<span class="small muted">Sets a starting target and tune limit. You can change both below.</span></div>` : ""}
+          <p class="small muted">${f.year && info.car && !info.checked ? `Toyota's ${esc(f.year)} maintenance guide hasn't been checked yet, so service reminders use the ${info.usedYear} schedule for now.` : "Sets the tank size and the service schedule."}</p>
+        </section>`;
+    const blend = `<section class="card"><h2>Blend</h2>
           <div class="head"><span class="stack"><b>Target blend</b><span class="small muted">E30 to E${mx}</span></span>
             <div class="stepper" role="group" aria-label="Target blend"><button type="button" data-act="carTarget" data-d="-1" aria-label="Lower target">−</button><span>E${f.target}</span><button type="button" data-act="carTarget" data-d="1" aria-label="Raise target">+</button></div></div>
           <div class="stack"><b>Your tune's ethanol limit</b>${seg("tuneLimit", [...C.TUNE_LIMITS.map((v) => [v, "E" + v]), ["50ns", "Not sure"]], "Tune limit")}
             <span class="small muted">The blend where your tune sets a code. Plans never land within 2 points of it. Not sure uses E50, the safest choice.</span></div>
-        </section>
+        </section>`;
+    const profile = P && P.profile ? `<section class="card"><h2>You <span class="small muted" style="text-transform:none;letter-spacing:0">· optional</span></h2>
+          <label class="field" for="c-forum">${esc(P.profile.forumLabel || "Forum name")}<input id="c-forum" type="text" maxlength="40" autocomplete="off" data-c="forumName" value="${esc(f.forumName)}"></label>
+          <label class="field" for="c-ig">Instagram<input id="c-ig" type="text" maxlength="40" autocomplete="off" autocapitalize="none" data-c="instagram" value="${esc(f.instagram)}" placeholder="@yourhandle"></label>
+        </section>` : "";
+    const err = f.error ? `<p class="note-err" role="alert">${esc(f.error)}</p>` : "";
+    // First time: only what the pump plan needs. Everything else has a sensible default and lives in settings.
+    if (first) return `<div class="stack"><h1>Set up your car</h1><p class="muted">A few answers so the pump plan fits your car. You can change any of it later.</p></div>
+      <form class="gap" data-form="saveCar" novalidate>
+        ${car}${blend}
+        <section class="card"><h2>E85</h2>${pickField("Where you usually buy E85", "primaryE85", "e85", "c-e85")}</section>
+        ${profile}${err}
+        <button class="btn primary full" type="submit">Save and start</button>
+      </form>`;
+    return `<div class="stack"><h1>Your car</h1><p class="muted">Change any of it here.</p></div>
+      <form class="gap" data-form="saveCar" novalidate>
+        ${car}${blend}
         <section class="card"><h2>Fuel</h2>
           <div class="stack"><b>Gas grade you mix with</b>${seg("gasGrade", C.GRADES.map((g) => [g, g]), "Gas grade")}</div>
           <label class="check" for="c-e0"><input id="c-e0" type="checkbox" data-c="ethanolFree" ${f.ethanolFree ? "checked" : ""}>Ethanol-free (E0)</label>
@@ -717,23 +855,21 @@
           ${pickField("Primary E85 station", "primaryE85", "e85", "c-e85")}
           ${pickField("Primary gas station", "primaryGas", "gas", "c-gas")}
         </section>
-        <section class="card"><h2>Oil change reminder</h2><div class="grid2">
-          <label class="field" for="c-om">Every (miles)<input id="c-om" type="number" inputmode="numeric" data-c="oilMiles" value="${esc(f.oilMiles)}"></label>
-          <label class="field" for="c-mo">Or every (months)<input id="c-mo" type="number" inputmode="numeric" data-c="oilMonths" value="${esc(f.oilMonths)}"></label></div></section>
         <section class="card"><h2>Receipt photos</h2>
-          ${[["phone_first", "Phone first, Claude if needed", "Free on your phone. Claude reads it automatically when the phone misses a number."], ["claude", "Always Claude", "Most accurate. Up to " + (S.quota ? S.quota.daily_limit : 6) + " reads a day."], ["phone", "Phone only", "Nothing leaves your phone."], ["off", "Off", "Type the numbers in."]]
-            .map(([v, t, d]) => `<label class="check" for="rm-${v}" style="align-items:flex-start"><input id="rm-${v}" type="radio" name="rm" data-c="receiptMode" value="${v}" ${f.receiptMode === v ? "checked" : ""}><span class="stack"><b>${t}</b><span class="small muted">${d}</span></span></label>`).join("")}
+          <label class="check" for="c-rx"><input id="c-rx" type="checkbox" data-c="receiptOn" ${f.receiptOn ? "checked" : ""}><b>Read my receipt photos</b></label>
+          <p class="small muted">Snap the pump receipt and the app fills in the gallons and price. Photos are read, then discarded. Off means you type the numbers in.</p>
         </section>
         <section class="card"><h2>Community</h2>
           <label class="check" for="c-share"><input id="c-share" type="checkbox" data-c="share" ${f.share ? "checked" : ""}><b>Share my fills with the community</b></label>
           <p class="small muted">Shared: month, station, blend, E85 strength, mpg, cost per mile and pump prices. Never shared: dates, odometer, notes, receipts, addresses or your email.</p>
           <label class="field" for="c-handle">Handle (only the admin sees it)<input id="c-handle" type="text" maxlength="40" data-c="handle" value="${esc(f.handle)}"></label>
         </section>
-        ${first ? "" : `<section class="card"><h2>Your data</h2><p class="small muted">To delete one fill, open it from History. To delete one oil change, open it from Oil changes. Or remove everything you've logged:</p>
-          ${S.confirmWipe ? `<div class="confirm"><span class="grow">Delete all ${S.fills.length} fill${S.fills.length === 1 ? "" : "s"} and ${S.oil.length} oil change${S.oil.length === 1 ? "" : "s"} for good? This can't be undone.</span><button type="button" class="btn danger" data-act="wipeLogs">Delete all</button><button type="button" class="btn" data-act="keepLogs">Keep them</button></div>`
-            : `<button type="button" class="btn danger" data-act="askWipe" ${S.fills.length + S.oil.length ? "" : "disabled"}>Delete all my fills and oil changes</button>`}</section>`}
-        ${f.error ? `<p class="note-err" role="alert">${esc(f.error)}</p>` : ""}
-        <button class="btn primary full" type="submit">${first ? "Save and start" : "Save"}</button>
+        ${profile}
+        <section class="card"><h2>Your data</h2><p class="small muted">To delete one fill, open it from History. To delete one service entry, open it from Service. Or remove everything you've logged:</p>
+          ${S.confirmWipe ? `<div class="confirm"><span class="grow">Delete all ${S.fills.length} fill${S.fills.length === 1 ? "" : "s"} and ${S.svcLog.length} service entr${S.svcLog.length === 1 ? "y" : "ies"} for good? This can't be undone.</span><button type="button" class="btn danger" data-act="wipeLogs">Delete all</button><button type="button" class="btn" data-act="keepLogs">Keep them</button></div>`
+            : `<button type="button" class="btn danger" data-act="askWipe" ${S.fills.length + S.svcLog.length ? "" : "disabled"}>Delete all my fills and service entries</button>`}</section>
+        ${err}
+        <button class="btn primary full" type="submit">Save</button>
       </form>`;
   }
   async function saveSettings(settings, handle) {
@@ -746,16 +882,28 @@
   }
   async function saveCar() {
     const f = S.carForm; f.error = "";
-    const s = { ...S.settings };
-    for (const k of ["target", "tuneLimit", "gasGrade", "oilMiles", "oilMonths"]) s[k] = Number(String(f[k]).replace("ns", ""));
+    const first = needsSetup(), s = { ...S.settings };
+    const fail = (m) => { f.error = m; render(); };
+    for (const k of ["target", "tuneLimit", "gasGrade"]) s[k] = Number(String(f[k]).replace("ns", ""));
     s.tuneLimitNotSure = String(f.tuneLimit) === "50ns";
-    Object.assign(s, { ethanolFree: !!f.ethanolFree, primaryE85: String(f.primaryE85 || "").trim(), primaryGas: String(f.primaryGas || "").trim(), receiptMode: f.receiptMode, share: !!f.share });
+    const info = V.resolve(f.model, f.year, f.trans);
+    if (P && P.models && !info.car) return fail("Choose your car.");
+    if (first && !f.year) return fail("Choose your model year.");
+    if (f.year && info.car && !info.trans) return fail("Choose manual or automatic.");
+    Object.assign(s, { year: f.year ? Number(f.year) : null, trans: (f.year && info.trans) || "", ethanolFree: !!f.ethanolFree, primaryE85: String(f.primaryE85 || "").trim(), primaryGas: String(f.primaryGas || "").trim(), share: !!f.share });
+    if (P && P.models) s.model = f.model;
+    if (P && P.packages) s.pkg = f.pkg || "";
+    if (P && P.profile) { s.forumName = String(f.forumName || "").trim().slice(0, 40); s.instagram = String(f.instagram || "").trim().replace(/^@+/, "").slice(0, 40); }
+    // One switch: on keeps whichever way of reading was already set, off types the numbers in.
+    s.receiptMode = f.receiptOn ? (S.settings.receiptMode !== "off" ? S.settings.receiptMode : "phone_first") : "off";
     s.primaryE85Id = s.primaryE85 ? String(f.primaryE85Id || "") : ""; s.primaryGasId = s.primaryGas ? String(f.primaryGasId || "") : "";
-    if (!s.primaryE85 && needsSetup()) { f.error = "Choose the station where you usually buy E85."; return render(); }
+    if (!s.primaryE85 && first) return fail("Choose the station where you usually buy E85.");
     s.setupDone = true;
-    if (!(s.oilMiles >= 500 && s.oilMiles <= 20000) || !(s.oilMonths >= 1 && s.oilMonths <= 24)) { f.error = "Check the oil change interval."; return render(); }
+    // Service reminders count from the odometer the app first knew for this car.
+    if (s.year && num(s.serviceStart) === null && odoNow() > 0) s.serviceStart = odoNow();
     s.target = Math.min(s.target, C.maxTarget(s));
-    if (!(await saveSettings(s, String(f.handle || "").trim()))) { f.error = "Couldn't save. Check your connection and try again."; return render(); }
+    if (!(await saveSettings(s, String(f.handle || "").trim()))) return fail("Couldn't save. Check your connection and try again.");
+    if (s.year && info.car && !info.checked) sb.rpc("report_unchecked_year", { p_model: carModel(), p_year: s.year }).then(() => {}, () => {});
     S.carForm = null; S.setupDone = true; S.flash = "Settings saved."; refreshLearning(4000); go("pump");
   }
 
@@ -965,7 +1113,7 @@
     const list = matches.filter((c) => p.showHidden || !hidden.includes(c.id));
     const nHidden = matches.length - list.length;
     const loc = `<button type="button" class="btn full near-btn" data-act="${p.nearOn ? "pickerNearOff" : "pickerNear"}" aria-pressed="${!!p.nearOn}">${icon("pin", 18)}<span>Use my current location</span></button>`;
-    if (p.nearOn) return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${nearBody(p, q)}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
+    if (p.nearOn) return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${nearBody(p, q)}<button type="button" class="link" data-act="pickerAdd" style="justify-self:start">Add a station that isn't listed</button>`;
     const head = list.length ? `<div class="head"><h2>${p.editing ? "Delete or hide stations" : "Stations"}</h2><button type="button" class="link" data-act="pickerEdit">${p.editing ? "Done" : "Edit"}</button></div>` : "";
     const foot = nHidden ? `<button type="button" class="link" data-act="pickerShowHidden">Show ${nHidden} hidden station${nHidden === 1 ? "" : "s"}</button>`
       : p.showHidden && hidden.length ? `<button type="button" class="link" data-act="pickerShowHidden">Hide them again</button>` : "";
@@ -976,7 +1124,7 @@
       : searching ? foot
       : `<p class="muted">${q ? "No station you use matches. Type 3 or more letters to search every E85 station." : "No stations yet. Search by town, ZIP or brand, or add the one you're using."}</p>${foot}`;
     const all = searching ? searchBody(p, list.map((c) => c.id)) : "";
-    return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}${all}<button type="button" class="btn dark full" data-act="pickerAdd">Add a station that isn't listed</button>`;
+    return `${p.error ? `<p class="note-err" role="alert">${esc(p.error)}</p>` : ""}${loc}${rows}${all}<button type="button" class="link" data-act="pickerAdd" style="justify-self:start">Add a station that isn't listed</button>`;
   }
   // The closest stations to where you are now, nearest first, filtered by whatever is typed in the search box.
   // Stations waiting out their Undo window after a delete stay out of it.
@@ -1210,26 +1358,26 @@
   const ACT = {
     target: async (el) => { const s = { ...S.settings }; s.target = Math.max(30, Math.min(C.maxTarget(s), s.target + Number(el.dataset.d))); S.settings = C.withDefaults(s); $("#tgt").textContent = "E" + s.target; renderReadout(); clearTimeout(ACT._t); ACT._t = setTimeout(() => saveSettings(S.settings), 800); },
     which: (el) => {
-      // Two taps on the same station within 400 ms: ask to remove it.
-      const w = el.dataset.w, now = Date.now(), dbl = S.lastTap && S.lastTap.w === w && now - S.lastTap.t < 400;
-      S.lastTap = dbl ? null : { w, t: now };
-      if (dbl && ((w === "primary" && S.settings.primaryE85) || (w === "other" && S.pump.other))) { S.pumpConfirm = w; return render(); }
       if (el.dataset.w === "other" && !S.pump.other) return openPicker({ type: "pumpOther" }, "e85");
       if (el.dataset.w === "primary" && !S.settings.primaryE85) return openPicker({ type: "primaryNow" }, "e85");
       S.pump.which = el.dataset.w; render();
     },
-    pumpKeep: () => { S.pumpConfirm = null; render(); },
-    pumpRemove: async () => {
-      const w = S.pumpConfirm; S.pumpConfirm = null;
-      if (w === "other" && S.pump.other) {
-        const prev = { other: S.pump.other, which: S.pump.which };
-        S.pump.other = null; S.pump.which = "primary"; render();
-        toast(`${prev.other.name} removed from the plan.`, "Undo", () => { S.pump.other = prev.other; S.pump.which = prev.which; render(); });
-      } else if (w === "primary" && S.settings.primaryE85) {
-        const prev = { primaryE85: S.settings.primaryE85, primaryE85Id: S.settings.primaryE85Id };
-        await saveSettings({ ...S.settings, primaryE85: "", primaryE85Id: "" }); render();
-        toast(`${prev.primaryE85} removed as your primary E85 station.`, "Undo", async () => { await saveSettings({ ...S.settings, ...prev }); render(); });
-      } else render();
+    // The other station comes off this plan with one tap and an Undo. The primary is changed in Your car.
+    pumpRemove: () => {
+      if (!S.pump.other) return;
+      const prev = { other: S.pump.other, which: S.pump.which };
+      S.pump.other = null; S.pump.which = "primary"; render();
+      toast(`${prev.other.name} removed from the plan.`, "Undo", () => { S.pump.other = prev.other; S.pump.which = prev.which; render(); });
+    },
+    skipAfter: () => { const f = pendingAfter(); if (f) store.set("skip-after", f.id); render(); },
+    moreNumbers: () => { S.moreNumbers = true; render(); },
+    svcOpen: (el) => { S.svc = { key: el.dataset.k }; S.oilForm = null; S.remForm = null; render(); window.scrollTo(0, 0); },
+    svcClose: () => { S.svc = null; S.oilForm = null; S.remForm = null; render(); window.scrollTo(0, 0); },
+    svcDone: (el) => { S.svc = { key: el.dataset.k }; S.oilForm = null; S.remForm = null; go("service"); },
+    svcLater: async (el) => {
+      const k = el.dataset.k, prev = S.settings.service || {};
+      await saveSettings({ ...S.settings, service: { ...prev, [k]: { ...(prev[k] || {}), later: V.addMonths(today(), 0.5) } } }); render();
+      toast("OK. I'll remind you again in two weeks.", "Undo", async () => { await saveSettings({ ...S.settings, service: prev }); render(); });
     },
     toastAct: () => { const fn = toast.fn; toast.fn = null; const el = $("#toast"); if (el) el.hidden = true; if (fn) fn(); },
     clearPrimary: (el) => {
@@ -1285,7 +1433,7 @@
       const [a, b] = await Promise.all([sb.from("fills").delete().eq("user_id", S.user.id), sb.from("oil_changes").delete().eq("user_id", S.user.id)]);
       S.confirmWipe = false;
       if (a.error || b.error) { S.carForm.error = "Couldn't delete everything. Check your connection and try again."; return render(); }
-      await reloadFills(); refreshLearning(3000); S.flash = "All your fills and oil changes were deleted."; render(); window.scrollTo(0, 0);
+      await reloadFills(); refreshLearning(3000); S.flash = "All your fills and service entries were deleted."; render(); window.scrollTo(0, 0);
     },
     pickOther: () => openPicker({ type: "pumpOther" }, "e85"),
     pickStation: (el) => { const i = Number(el.dataset.i); openPicker({ type: "stop", i }, S.form.stops[i].kind); },
@@ -1310,12 +1458,6 @@
     useSuggest: () => { const c = S.pumpSuggest; if (!c) return; S.pump.other = { id: c.id, name: c.name }; S.pump.which = "other"; S.pumpSuggest = null; render(); },
     logPlan: () => { S.form = newForm(true); go("log"); },
     addStop: () => { S.form.stops.push(blankStop(S.form.stops.length ? "gas" : "e85")); renderStops(); },
-    // Double-tap a stop's title (or tap Remove) to ask; Delete removes it with Undo.
-    stopTap: (el) => {
-      const i = Number(el.dataset.i), now = Date.now(), dbl = S.lastStopTap && S.lastStopTap.i === i && now - S.lastStopTap.t < 400;
-      S.lastStopTap = dbl ? null : { i, t: now };
-      if (dbl) { S.form.confirmStop = i; renderStops(); }
-    },
     askRemoveStop: (el) => { S.form.confirmStop = Number(el.dataset.i); renderStops(); },
     keepStop: () => { S.form.confirmStop = null; renderStops(); },
     removeStop: (el) => {
@@ -1338,19 +1480,33 @@
     },
     editFill: (el) => { const f = S.fills.find((x) => x.id === el.dataset.id); if (f) { S.form = editForm(f); go("log"); } },
     days: (el) => { S.communityDays = Number(el.dataset.d) || 0; S.community = null; render(); loadCommunity(); },
-    editOil: (el) => { const o = S.oil.find((x) => x.id === el.dataset.id); if (!o) return; const common = [...C.COMMON_OILS, ...oilChoices().mine]; S.oilForm = { id: o.id, date: o.date, odometer: String(o.odometer), oil: common.includes(o.oil_type) ? o.oil_type : "__custom", customOil: !common.includes(o.oil_type), oilOwn: o.oil_type, filter: o.filter_type || C.FACTORY_FILTER, notes: o.notes || "", error: "", confirmDelete: false }; render(); window.scrollTo(0, 0); },
-    cancelOil: () => { S.oilForm = null; render(); },
+    editOil: (el) => {
+      const o = S.svcLog.find((x) => x.id === el.dataset.id); if (!o) return;
+      const common = [...C.COMMON_OILS, ...oilChoices().mine], item = o.item || "oil", isOil = item === "oil";
+      S.svc = { key: item }; S.remForm = null;
+      S.oilForm = { id: o.id, item, date: o.date, odometer: String(o.odometer), oil: !isOil || common.includes(o.oil_type) ? o.oil_type || "" : "__custom", customOil: isOil && !common.includes(o.oil_type), oilOwn: o.oil_type, filter: o.filter_type || C.FACTORY_FILTER, notes: o.notes || "", error: "", confirmDelete: false };
+      render(); window.scrollTo(0, 0);
+    },
+    cancelOil: () => { S.oilForm = null; S.svc = null; render(); },
     askDeleteOil: () => { S.oilForm.confirmDelete = true; render(); },
     keepOil: () => { S.oilForm.confirmDelete = false; render(); },
     deleteOil: async () => {
-      const gone = S.oil.find((x) => x.id === S.oilForm.id);
-      await sb.from("oil_changes").delete().eq("id", S.oilForm.id); S.oilForm = null; await reloadFills(); render();
-      if (gone) toast("Oil change deleted.", "Undo", async () => { const { error } = await sb.from("oil_changes").insert({ ...gone }); if (!error) { await reloadFills(); render(); toast("Oil change restored."); } else toast("Couldn't restore the oil change."); });
+      const gone = S.svcLog.find((x) => x.id === S.oilForm.id);
+      await sb.from("oil_changes").delete().eq("id", S.oilForm.id); S.oilForm = null; S.svc = null; await reloadFills(); render();
+      if (gone) toast("Entry deleted.", "Undo", async () => { const { error } = await sb.from("oil_changes").insert({ ...gone }); if (!error) { await reloadFills(); render(); toast("Entry restored."); } else toast("Couldn't restore the entry."); });
     },
     askReset: () => { S.confirmReset = true; render(); },
     cancelReset: () => { S.confirmReset = false; render(); },
     resetLearn: async () => { await sb.from("profiles").update({ learn_since: today() }).eq("id", S.user.id); S.profile.learn_since = today(); S.confirmReset = false; S.flash = "Your car's learning starts over from today."; refreshLearning(); render(); },
-    set: (el) => { S.carForm[el.dataset.k] = el.dataset.v; if (el.dataset.k === "tuneLimit") S.carForm.target = Math.min(Number(S.carForm.target), C.maxTarget({ tuneLimit: Number(String(el.dataset.v).replace("ns", "")) })); render(); },
+    set: (el) => {
+      const f = S.carForm, k = el.dataset.k; f[k] = el.dataset.v; f.error = "";
+      if (k === "model") { f.year = ""; f.trans = ""; f.pkg = ""; }
+      if (k === "year") { const t = V.resolve(f.model, f.year, f.trans); f.trans = t.trans || ""; }
+      // A package preset fills in the target and tune limit it was built for; both stay editable.
+      if (k === "pkg" && P && P.packages) { const pk = (P.packages[f.model] || []).find((x) => x.id === f.pkg); if (pk) { if (pk.limit) f.tuneLimit = pk.limitSure === false ? "50ns" : pk.limit; if (pk.target) f.target = pk.target; } }
+      if (k === "tuneLimit" || k === "pkg") f.target = Math.min(Number(f.target), C.maxTarget({ tuneLimit: Number(String(f.tuneLimit).replace("ns", "")) }));
+      render();
+    },
     carTarget: (el) => { const f = S.carForm; f.target = Math.max(30, Math.min(C.maxTarget({ tuneLimit: Number(String(f.tuneLimit).replace("ns", "")) }), Number(f.target) + Number(el.dataset.d))); render(); },
     decide: async (el) => { await sb.rpc("admin_decide", { p_user: el.dataset.id, p_approve: el.dataset.ok === "1" }); loadAdmin(); },
     unflag: async (el) => { await sb.rpc("admin_unflag", { p_user: el.dataset.id }); loadAdmin(); },
@@ -1386,6 +1542,7 @@
       updateSummary(); return;
     }
     if (el.dataset.o && S.oilForm) { S.oilForm[el.dataset.o] = el.value; return; }
+    if (el.dataset.rem && S.remForm) { S.remForm[el.dataset.rem] = el.type === "checkbox" ? el.checked : el.value; return; }
     if (el.dataset.c && S.carForm) { S.carForm[el.dataset.c] = el.type === "checkbox" ? el.checked : el.value; }
   });
   document.addEventListener("change", (e) => {
@@ -1408,6 +1565,8 @@
       else if (k === "verifyCode") await verifyCode($("#code").value);
       else if (k === "saveFill") await saveFill();
       else if (k === "saveOil") await saveOil();
+      else if (k === "saveRem") await saveRem();
+      else if (k === "saveAfter") await saveAfter();
       else if (k === "saveCar") await saveCar();
       else if (k === "pickSave") await pickerSave();
       else if (k === "stSave") await saveStationName();
@@ -1426,7 +1585,7 @@
     const user = session ? session.user : null;
     const changed = (user && user.id) !== (S.user && S.user.id);
     S.user = user;
-    if (!user) { Object.assign(S, { profile: null, fills: [], oil: [], car: null, myStations: [], stations: [], form: null, oilForm: null, carForm: null, admin: null, community: null }); S.ready = true; render(); return; }
+    if (!user) { Object.assign(S, { profile: null, fills: [], oil: [], svcLog: [], car: null, myStations: [], stations: [], form: null, oilForm: null, remForm: null, svc: null, carForm: null, admin: null, community: null }); S.ready = true; render(); return; }
     if (changed) {
       setTimeout(async () => {
         await loadAll();

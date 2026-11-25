@@ -98,8 +98,26 @@ const W = path.resolve(__dirname, "..");
   log("2b7 undo delete:", await page.locator('.srow-wrap:has-text("Speedway")').count(), "shown | delete sent to server:", await page.evaluate(() => window.__calls.some((c) => c.rpc === "delete_station")));
   await page.click("[data-act=pickerEdit]");
   await page.click('.srow:has-text("MotoMart")'); await page.waitForSelector("text=Set up your car");
-  // Primary gas: not listed yet, so add it from the map match and confirm the standard name
+  // First-time setup asks only for the car, the blend and the E85 station
+  const firstRun = await page.evaluate(() => ({ gas: !!document.querySelector("#c-gas"), handle: !!document.querySelector("#c-handle"), share: !!document.querySelector("#c-share"), rx: !!document.querySelector("#c-rx"),
+    years: [...document.querySelectorAll("[data-k=year]")].map((b) => b.textContent).join() }));
+  log("2e first-time setup:", JSON.stringify(firstRun));
+  if (firstRun.gas || firstRun.handle || firstRun.share || firstRun.rx || firstRun.years !== "2023,2024,2025,2026,2027") throw new Error("first-time setup should be short and ask the model year");
+  await page.click("button:has-text('Save and start')"); await page.waitForSelector("text=Choose your model year.");
+  await page.click("[data-k=year][data-v='2025']"); await page.waitForSelector("[data-k=trans]");
+  await page.click("button:has-text('Save and start')"); await page.waitForSelector("text=Choose manual or automatic.");
+  await page.click("[data-k=year][data-v='2024']");
+  if (await page.locator("[data-k=trans]").count()) throw new Error("a 2024 GR Corolla is manual only, so no transmission question");
+  log("2f after choosing 2024:", (await page.locator("#c-e85").innerText()).trim(), "| transmission asked:", await page.locator("[data-k=trans]").count());
+  await shot("setup");
+  await page.click("button:has-text('Save and start')"); await page.waitForSelector("text=Pump plan");
+  const firstSaved = await page.evaluate(() => window.__db.profiles[0].settings);
+  log("2g saved:", JSON.stringify({ year: firstSaved.year, trans: firstSaved.trans, e85: firstSaved.primaryE85, receipt: firstSaved.receiptMode, oilMiles: firstSaved.oilMiles }));
+  if (firstSaved.year !== 2024 || firstSaved.trans !== "mt" || firstSaved.receiptMode !== "phone_first" || firstSaved.oilMiles !== null) throw new Error("first-time setup saved the wrong settings");
+  // The rest lives in Your car. Primary gas: not listed yet, so add it from the map match and confirm the standard name
+  await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("#c-gas"); await page.waitForSelector("text=Add a station that isn't listed");
+  if (!(await page.getAttribute("[data-act=pickerAdd]", "class")).includes("link")) throw new Error("Add a station should be a small link");
   await page.click("text=Add a station that isn't listed"); await page.waitForSelector("text=Is it one of these?");
   await shot("picker-add");
   await page.fill("#pickLookup", "thorntons"); await page.waitForSelector("text=Matching stations");
@@ -122,14 +140,22 @@ const W = path.resolve(__dirname, "..");
   await page.fill("#pickStreet", "4500 N Green River Road, Evansville, IN 47715");
   await page.fill("#pickBrand", "Costco");
   log("2c confirm preview:", await page.locator("#pickPreview").innerText());
-  await page.click("button:has-text('Confirm and use')"); await page.waitForSelector("text=Set up your car");
+  await page.click("button:has-text('Confirm and use')"); await page.waitForSelector("text=Your data");
   const sent = await page.evaluate(() => window.__calls.filter((c) => c.rpc === "standardize_station").pop().args);
   log("2c2 saved:", JSON.stringify(sent));
   if (sent.p_street !== "4500 N Green River Rd" || sent.p_city !== "Evansville" || sent.p_state !== "IN" || sent.p_postcode !== "47715") throw new Error("address not split");
   log("2d primaries:", (await page.locator("#c-e85").innerText()).trim(), "|", (await page.locator("#c-gas").innerText()).trim());
   await page.fill("#c-handle", "jchurch");
-  await page.click("button:has-text('Save and start')");
+  // Receipt photos are one switch now, not four choices
+  const rx = await page.evaluate(() => ({ on: document.querySelector("#c-rx").checked, radios: document.querySelectorAll("[name=rm]").length }));
+  log("2h receipt switch:", JSON.stringify(rx));
+  if (!rx.on || rx.radios) throw new Error("receipt photos should be one on/off switch");
+  await page.click("form[data-form=saveCar] button[type=submit]");
   await page.waitForSelector("text=Pump plan");
+  // Confirmations show in the bottom bar only, not as a banner that pushes the pump plan down
+  await page.waitForSelector("#toast:not([hidden])");
+  log("2i saved message:", (await page.locator("#toast").innerText()).trim(), "| banners saying it:", await page.locator(".banner:has-text('Settings saved')").count());
+  if (!/Settings saved/.test(await page.locator("#toast").innerText()) || await page.locator(".banner:has-text('Settings saved')").count()) throw new Error("the saved message should be in the bottom bar only");
   await page.fill("#dte", "34"); await page.fill("#sensor", "38");
   log("3 pump readout:", (await page.locator("#readout").innerText()).replace(/\n+/g, " | "));
   await shot("pump");
@@ -138,6 +164,11 @@ const W = path.resolve(__dirname, "..");
   log("3b suggestion:", await page.locator("#pumpSuggest").innerText());
   await page.click("text=Use it for this plan");
   log("  other station note:", (await page.locator("#readout p").innerText()).slice(0, 110));
+  await page.click("[data-act=pumpRemove]"); await page.waitForSelector("#toast:not([hidden])");
+  log("3c remove other:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "), "| button:", (await page.locator("[data-act=which][data-w=other]").innerText()).trim());
+  if ((await page.locator("[data-act=which][data-w=other]").innerText()).trim() !== "Other station") throw new Error("the other station wasn't removed");
+  await page.click("#toast [data-act=toastAct]");
+  if (!/Speedway/.test(await page.locator("[data-act=which][data-w=other]").innerText())) throw new Error("Undo didn't bring the other station back");
   await page.click("[data-act=which][data-w=primary]");
   await page.click("#logPlan");
   await page.waitForSelector("text=Log a fill");
@@ -180,6 +211,8 @@ const W = path.resolve(__dirname, "..");
   if (!/Read by Claude/.test(note1) || await page.locator("[data-act=claudeRead]").count()) throw new Error("Claude didn't read the receipt automatically");
   await shot("log");
   log("6 after Claude read:", JSON.stringify(await page.evaluate(() => ({ st: document.querySelector("#st1").textContent.trim(), g: document.querySelector("#ga1").value, grade: document.querySelector("#g1").value, sum: document.querySelector("#f-summary").textContent }))));
+  log("6b gas stop ethanol box:", await page.locator("#ge1").count());
+  if (await page.locator("#ge1").count()) throw new Error("a gas stop shouldn't ask for Ethanol %");
   await page.fill("#f-after", "40");
   await page.click("button:has-text('Save fill')");
   await page.waitForSelector("text=History");
@@ -219,10 +252,10 @@ const W = path.resolve(__dirname, "..");
   await page.click('.srow:has-text("Speedway")'); await page.waitForSelector("text=You added this station");
   await page.click("text=Fix the name"); await page.fill("#st-street", "N Main St"); await page.click("button:has-text('Save name')");
   await page.waitForSelector("text=Renamed to");
-  log("8c renamed:", await page.locator(".banner").first().innerText());
+  log("8c renamed:", await page.locator("#toast").innerText());
   await page.click("text=Delete this station"); await page.click("[data-act=stDelete]"); await page.waitForSelector("text=Station deleted");
-  log("8d deleted:", await page.locator(".banner").first().innerText(), "| still listed:", await page.locator('.srow:has-text("Speedway")').count());
-  for (const v of ["community", "oil", "learned", "car", "about", "admin", "more"]) {
+  log("8d deleted:", await page.locator("#toast").innerText(), "| still listed:", await page.locator('.srow:has-text("Speedway")').count());
+  for (const v of ["community", "service", "learned", "car", "about", "admin", "more"]) {
     await page.evaluate((h) => { location.hash = h; }, v);
     await page.waitForTimeout(150);
     log(`8 ${v}:`, (await page.locator("#app").innerText()).replace(/\n+/g, " | ").slice(0, 170));
@@ -233,14 +266,14 @@ const W = path.resolve(__dirname, "..");
   await page.waitForSelector("text=E85 stations as of");
   const about = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
   log("8e about:", about);
-  if (!/Version 28/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
+  if (!/Version 29/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
   await shot("about");
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");
   log("10 remove primary:", (await page.locator("#c-gas").innerText()).trim(), "| bar:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
   await page.click("#toast [data-act=toastAct]");
   log("10b undo:", (await page.locator("#c-gas").innerText()).trim());
-  await page.click("text=Delete all my fills and oil changes"); await page.click("[data-act=wipeLogs]"); await page.waitForSelector("text=were deleted");
+  await page.click("text=Delete all my fills and service entries"); await page.click("[data-act=wipeLogs]"); await page.waitForSelector("text=were deleted");
   log("10c delete all:", await page.evaluate(() => window.__db.fills.length + window.__db.oil_changes.length), "left");
   // Removing your primary station takes it off the fill you're logging and the pump plan; Undo brings it back
   await page.evaluate(() => { location.hash = "pump"; }); await page.waitForSelector("text=Pump plan");
@@ -260,8 +293,10 @@ const W = path.resolve(__dirname, "..");
   // Delete pump stops on Log a fill: double-tap a stop's title or tap Remove, then confirm; Undo brings it back
   await page.evaluate(() => { location.hash = "log"; }); await page.waitForSelector("text=Log a fill");
   log("13 stops:", await page.locator(".stop").count());
-  await page.dblclick(".stop[data-i='1'] .stop-head b"); await page.waitForSelector("[data-act=removeStop]");
-  log("13a double-tap confirm:", (await page.locator(".stop[data-i='1'] .confirm").innerText()).replace(/\n+/g, " "));
+  await page.dblclick(".stop[data-i='1'] .stop-head b");
+  if (await page.locator("[data-act=removeStop]").count() || await page.locator("text=Double-tap").count()) throw new Error("a double-tap on a stop should do nothing now");
+  await page.click(".stop[data-i='1'] [data-act=askRemoveStop]"); await page.waitForSelector("[data-act=removeStop]");
+  log("13a Remove asks first:", (await page.locator(".stop[data-i='1'] .confirm").innerText()).replace(/\n+/g, " "));
   await shot("stop-confirm");
   await page.click("[data-act=removeStop]");
   log("13b after delete:", await page.locator(".stop").count(), "stop | bar:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "));
@@ -274,19 +309,11 @@ const W = path.resolve(__dirname, "..");
   await page.click("[data-act=addStop]");
   log("13f add again:", await page.locator(".stop").count(), "stop, kind:", await page.locator(".stop [aria-pressed=true]").first().innerText());
   await page.click("[data-act=cancelFill]");
-  // Double-tap a station on the pump plan, confirm, and start over
+  // The pump plan has no hidden double-tap either
   await page.evaluate(() => { location.hash = "pump"; }); await page.waitForSelector("text=Pump plan");
-  log("12 pump hint:", await page.locator("text=Double-tap a station to remove it.").count());
   await page.click("[data-act=which][data-w=primary]"); await page.click("[data-act=which][data-w=primary]");
-  await page.waitForSelector("[data-act=pumpRemove]");
-  log("12a confirm:", (await page.locator(".confirm").innerText()).replace(/\n+/g, " "));
-  await shot("pump-confirm");
-  await page.click("[data-act=pumpRemove]"); await page.waitForSelector("text=Choose primary station");
-  log("12b after remove:", (await page.locator("[data-act=which][data-w=primary]").innerText()).trim(), "| still on pump plan:", await page.locator("text=Pump plan").count());
-  await page.click("#toast [data-act=toastAct]"); await page.waitForTimeout(300);
-  log("12c undo:", (await page.locator("[data-act=which][data-w=primary]").innerText()).trim());
-  await page.click("[data-act=which][data-w=primary]"); await page.waitForTimeout(500); await page.click("[data-act=which][data-w=primary]");
-  log("12d two slow taps ask nothing:", await page.locator("[data-act=pumpRemove]").count());
+  log("12 double-tap on the pump plan:", await page.locator(".confirm").count(), "confirm,", await page.locator("text=Double-tap").count(), "hint");
+  if (await page.locator(".confirm").count() || await page.locator("text=Double-tap").count()) throw new Error("the pump plan should have no double-tap");
   await page.emulateMedia({ colorScheme: "dark" });
   await page.evaluate(() => { location.hash = "pump"; }); await page.waitForTimeout(150);
   await page.fill("#dte", "34"); await page.fill("#sensor", "38");
@@ -320,5 +347,108 @@ const W = path.resolve(__dirname, "..");
   const btnState = await page.locator("[data-act=claudeRead]").evaluateAll((b) => b.map((x) => x.disabled + " " + x.textContent.trim()));
   log("15 out of Claude reads:", await page.locator("#stops .note-err").first().innerText(), "| Claude calls:", after - before, "| button:", JSON.stringify(btnState));
   if (after !== before) throw new Error("Claude was called with no reads left");
+
+  // ---- Service reminders, the after-fill reading, and the shorter screens ----
+  const daysAgo = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString("en-CA");
+  const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.evaluate(([d3, d80]) => {
+    sessionStorage.setItem("__preset", JSON.stringify({ setupDone: true, target: 40, tuneLimit: 50, gasGrade: 93, primaryE85: "MotoMart · E Lloyd Expy", primaryE85Id: "st-moto", year: 2024, trans: "mt", receiptMode: "claude", oilMiles: 3000, oilMonths: 6, serviceStart: 46886 }));
+    sessionStorage.setItem("__presetDb", JSON.stringify({
+      fills: [{ id: "f1", user_id: "u-test", date: d3, odometer: 59700, dte: 30, sensor_before: 38, sensor_after: null, full: true, target: 40, plan: null, notes: null,
+        stops: [{ kind: "e85", gallons: 5, price: 2.4, total: 12, station: "MotoMart · E Lloyd Expy", station_id: "st-moto" }, { kind: "gas", grade: 93, gallons: 5, price: 3.3, total: 16.5, station: "" }] }],
+      oil_changes: [{ id: "o1", user_id: "u-test", item: "oil", date: d80, odometer: 57000, oil_type: "Mobil 1 0W-20", filter_type: null, notes: null }] }));
+  }, [daysAgo(3), daysAgo(80)]);
+  await page.evaluate(() => { location.hash = "pump"; }); await page.reload(); await page.waitForSelector("text=Pump plan");
+  // The pump screen asks for the sensor reading the last fill is missing
+  await page.waitForSelector("form.after-ask");
+  log("16 after-fill ask:", (await page.locator("form.after-ask").innerText()).replace(/\n+/g, " | "));
+  await shot("pump-notes");
+  await page.fill("#afterNow", "41"); await page.click("form.after-ask button[type=submit]");
+  await page.waitForFunction(() => window.__db.fills[0].sensor_after === 41);
+  await page.waitForFunction(() => !document.querySelector("form.after-ask"));
+  log("16a reading saved:", await page.evaluate(() => window.__db.fills[0].sensor_after), "| sensor box:", await page.inputValue("#sensor"), "| bar:", (await page.locator("#toast").innerText()).trim());
+  expect(await page.inputValue("#sensor") === "41", "the saved reading should fill the sensor box");
+  // The most pressing service shows as a note with Done and Later
+  const note = () => page.locator(".svc-note").innerText().then((t) => t.replace(/\n+/g, " | "));
+  log("17 service note:", await note());
+  expect(/Tire rotation\. \| ?Due now, 9,700 miles over\./.test((await note()).replace(/\s+/g, " ")) || /Tire rotation\. Due now, 9,700 miles over/.test(await note()), "the note should lead with the overdue tire rotation");
+  expect(/9 more/.test(await note()), "the note should count the other services coming due");
+  await page.click(".svc-note [data-act=svcLater]"); await page.waitForSelector("#toast:not([hidden])");
+  log("17a later:", (await page.locator("#toast").innerText()).replace(/\n+/g, " "), "| note now:", await note());
+  expect(!/Tire rotation/.test(await note()) && await page.evaluate(() => !!window.__db.profiles[0].settings.service.tires.later), "Later should put the tire rotation off");
+  await page.click("#toast [data-act=toastAct]"); await page.waitForFunction(() => /Tire rotation/.test(document.querySelector(".svc-note").textContent));
+  await page.click(".svc-note [data-act=svcDone]"); await page.waitForSelector("h1:has-text('Tire rotation')");
+  log("17b done opens:", await page.locator("h1").innerText(), "| odometer:", await page.inputValue("#o-odo"), "| oil box:", await page.locator("#o-oil").count());
+  expect(await page.inputValue("#o-odo") === "59700" && !(await page.locator("#o-oil").count()), "Done should open the service with the odometer filled in and no oil question");
+  await shot("service-item");
+  await page.click("button:has-text('Save as done')"); await page.waitForSelector("h1:has-text('Service')");
+  const tires = await page.evaluate(() => window.__db.oil_changes.find((o) => o.item === "tires"));
+  log("17c logged:", JSON.stringify({ item: tires.item, odo: tires.odometer, oil: tires.oil_type }));
+  expect(tires.odometer === 59700 && tires.oil_type === null, "the tire rotation wasn't logged");
+  // The Service page: every reminder for this car and year, with its source
+  const svc = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
+  log("18 service page:", svc.slice(0, 900));
+  expect(/From Toyota's 2024 GR Corolla maintenance guide, checked Nov 25, 2026\./.test(svc), "the schedule's source is missing");
+  expect(/Manual transmission oil[^|]*\|[^|]*\|?[^|]*owner practice/.test(svc) && !/Automatic transmission/.test(svc), "a manual 2024 should show manual transmission oil as owner practice and nothing for an automatic");
+  expect(/Engine oil and filter \| Due soon \| Due in 300 miles · at 60,000 mi/.test(svc), "the oil change should be due in 300 miles on the owner's 3,000 mile interval");
+  expect(/Tire rotation \| Due at 64,700 mi or /.test(svc), "the tire rotation should count from when it was marked done");
+  expect(/Done so far \| Tire rotation \| 59,700 mi/i.test(svc) && /Engine oil and filter \| 57,000 mi \|[^|]*Mobil 1 0W-20/.test(svc), "the done list is wrong");
+  await shot("service");
+  // An owner's own interval, back to Toyota's, and switching one off
+  await page.click(".item:has-text('Engine oil and filter') >> nth=0"); await page.waitForSelector("h1:has-text('Engine oil and filter')");
+  log("18a oil reminder:", (await page.locator("form[data-form=saveRem]").innerText()).replace(/\n+/g, " | "), "| miles:", await page.inputValue("#rem-mi"));
+  expect(/Toyota's schedule: every 5,000 miles or 6 months\. You've set your own\./.test(await page.locator("form[data-form=saveRem]").innerText()) && await page.inputValue("#rem-mi") === "3000", "the oil reminder should show the owner's interval beside Toyota's");
+  await page.fill("#rem-mi", "5000"); await page.click("button:has-text('Save reminder')"); await page.waitForFunction(() => window.__db.profiles[0].settings.oilMiles === null);
+  log("18b back to Toyota's:", await page.evaluate(() => JSON.stringify([window.__db.profiles[0].settings.oilMiles, window.__db.profiles[0].settings.oilMonths])));
+  await page.click("[data-act=svcClose]"); await page.waitForSelector("h1:has-text('Service')");
+  await page.click(".item:has-text('Drive belt')"); await page.waitForSelector("h1:has-text('Drive belt')");
+  await page.uncheck("#rem-on"); await page.click("button:has-text('Save reminder')"); await page.waitForFunction(() => window.__db.profiles[0].settings.service.drive_belt && window.__db.profiles[0].settings.service.drive_belt.off === true);
+  await page.click("[data-act=svcClose]"); await page.waitForSelector("h1:has-text('Service')");
+  log("18c drive belt off:", (await page.locator(".item:has-text('Drive belt')").innerText()).replace(/\n+/g, " | "));
+  expect(/Off/.test(await page.locator(".item:has-text('Drive belt')").innerText()), "a switched-off reminder should say Off");
+  // Editing an entry from the done list
+  await page.click(".item:has-text('Mobil 1 0W-20')"); await page.waitForSelector("text=Edit this entry");
+  log("18d edit entry:", await page.locator("h1").innerText(), "| oil:", await page.inputValue("#o-oil"));
+  await page.fill("#o-odo", "57100"); await page.click("button:has-text('Save changes')"); await page.waitForFunction(() => window.__db.oil_changes.find((o) => o.id === "o1").odometer === 57100);
+  // More shows Service with what's next
+  await page.evaluate(() => { location.hash = "more"; }); await page.waitForSelector("text=Signed in as");
+  log("19 More:", (await page.locator("nav[aria-label=More] .item").first().innerText()).replace(/\n+/g, " | "));
+  expect(/^Service/.test(await page.locator("nav[aria-label=More] .item").first().innerText()) && !/Oil changes/.test(await page.locator("#app").innerText()), "More should list Service, not Oil changes");
+  // One receipt switch that keeps whichever way of reading was set; off types the numbers in
+  await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
+  await page.click("form[data-form=saveCar] button[type=submit]"); await page.waitForSelector("text=Pump plan");
+  expect(await page.evaluate(() => window.__db.profiles[0].settings.receiptMode) === "claude", "saving with the switch on should keep the way of reading that was set");
+  await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
+  await page.uncheck("#c-rx"); await page.click("[data-k=year][data-v='2027']");
+  await page.click("form[data-form=saveCar] button[type=submit]"); await page.waitForSelector("text=Pump plan");
+  const s2 = await page.evaluate(() => window.__db.profiles[0].settings), reported = await page.evaluate(() => window.__calls.filter((c) => c.rpc === "report_unchecked_year").pop());
+  log("20 switch off + 2027:", s2.receiptMode, s2.year, "| reported:", JSON.stringify(reported && reported.args));
+  expect(s2.receiptMode === "off" && s2.year === 2027 && reported && reported.args.p_model === "grc" && reported.args.p_year === 2027, "receipt switch or unchecked year not handled");
+  await page.evaluate(() => { location.hash = "log"; }); await page.waitForSelector("text=Log a fill");
+  expect(!(await page.locator("[data-act=scan]").count()), "with receipt photos off there should be no scan button");
+  await page.evaluate(() => { location.hash = "service"; }); await page.waitForSelector("h1:has-text('Service')");
+  log("20a unchecked year:", (await page.locator("#app p.small.muted").first().innerText()));
+  expect(/Toyota's 2027 GR Corolla guide hasn't been checked yet, so this uses the 2026 schedule\./.test(await page.locator("#app").innerText()), "an unchecked year should say which schedule it uses");
+  // Plain words on the learned page; cost tables tucked behind a link on Community
+  await page.evaluate(() => { location.hash = "learned"; }); await page.waitForSelector("text=What the app has learned");
+  const learned = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
+  log("21 fuel left:", learned.slice(learned.indexOf("FUEL LEFT"), learned.indexOf("FUEL LEFT") + 230));
+  expect(/About 2\.4 gallons \| ?at 30 miles to empty|About 2\.4 gallons at 30 miles to empty/.test(learned) && !/DTE ÷/.test(learned), "fuel left should be in plain words");
+  await page.evaluate(() => { location.hash = "community"; }); await page.waitForSelector("text=Stations members use");
+  expect(!/Cost per mile by blend \|/i.test((await page.locator("#app").innerText()).replace(/\n+/g, " | ").replace("More numbers: cost per mile by blend and gas grade", "")), "the cost tables should start tucked away");
+  await page.click("[data-act=moreNumbers]"); await page.waitForSelector("h2:has-text('Cost per mile by blend')");
+  log("22 community more numbers:", await page.locator("h2").allInnerTexts());
+  await shot("community");
+  // With no model year yet, Service shows the oil change and asks for the year
+  await page.evaluate(() => { sessionStorage.setItem("__preset", JSON.stringify({ setupDone: true, target: 40, tuneLimit: 50, gasGrade: 93, primaryE85: "MotoMart · E Lloyd Expy", primaryE85Id: "st-moto", oilMiles: 3000, oilMonths: 6 })); });
+  await page.evaluate(() => { location.hash = "service"; }); await page.reload(); await page.waitForSelector("h1:has-text('Service')");
+  const noYear = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
+  log("23 no year yet:", noYear.slice(0, 330));
+  expect(/Add your model year to see the full service schedule for your GR Corolla\./.test(noYear) && /Engine oil and filter/.test(noYear) && !/Brake fluid/.test(noYear), "without a model year only the oil change should show");
+  await page.evaluate(() => { sessionStorage.removeItem("__preset"); sessionStorage.removeItem("__presetDb"); });
+  const real = errors.filter((e) => !/Failed to load resource/.test(e)); // fonts and other outside files are blocked in the test
+  log("24 errors:", real.length ? real : "none");
+  expect(!real.length, "page errors: " + real.join(" | "));
   await browser.close();
 })();
