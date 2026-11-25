@@ -4,6 +4,11 @@
   const TANK = 13.2;
   const BAND = 3;
   const GRADES = [87, 88, 89, 91, 92, 93];
+  // The highest octane a receipt can show: race fuels at track pumps reach about 118 pump octane (VP C16, Sunoco's
+  // top leaded fuel), and VP rates C16 over 120 research octane.
+  const MAX_OCTANE = 125;
+  // The highest price per gallon a receipt read keeps: race fuel at a track pump can run $10 to $20 a gallon.
+  const MAX_PRICE = 40;
   const TUNE_LIMITS = [50, 60, 70, 85];
   const COMMON_OILS = ["Toyota Genuine 0W-20", "Mobil 1 0W-20", "Pennzoil Ultra Platinum 0W-20", "Motul 8100 Eco-Lite 0W-20", "Amsoil Signature Series 0W-20"];
   const FACTORY_FILTER = "Toyota 90915-YZZN1";
@@ -168,10 +173,10 @@
       return null;
     };
     let gallons = find([/(?:gallons?|gals?|volume|vol|qty|quantity)\b[^0-9]{0,8}(\d{1,2}[.,]\d{2,3})/i, /(\d{1,2}[.,]\d{3})\s*(?:gal|g)\b/i]);
-    let price = find([/(?:price|ppg|per\s*gal(?:lon)?|\$\s*\/\s*g(?:al)?|unit)\b[^0-9]{0,8}(\d[.,]\d{2,3})/i, /@\s*\$?\s*(\d[.,]\d{3})/, /(\d[.,]\d{3})\s*\/\s*g/i]);
+    let price = find([/(?:price|ppg|per\s*gal(?:lon)?|\$\s*\/\s*g(?:al)?|unit)\b[^0-9]{0,8}(\d{1,2}[.,]\d{2,3})/i, /@\s*\$?\s*(\d{1,2}[.,]\d{3})/, /(\d{1,2}[.,]\d{3})\s*\/\s*g/i]);
     let total = find([/(?:total|fuel\s*sale|sale|amount|amt|purchase)\b[^0-9]{0,10}(\d{1,3}[.,]\d{2})\b/i]);
     if (gallons !== null && (gallons <= 0 || gallons > 30)) gallons = null;
-    if (price !== null && (price < 0.5 || price > 15)) price = null;
+    if (price !== null && (price < 0.5 || price > MAX_PRICE)) price = null;
     if (total !== null && (total <= 0 || total > 400)) total = null;
     if (total === null && gallons !== null && price !== null) total = Math.round(gallons * price * 100) / 100;
     if (gallons === null && total !== null && price !== null) gallons = Math.round((total / price) * 1000) / 1000;
@@ -181,7 +186,13 @@
     if (/\bE\s*-?\s*85\b|flex\s*fuel/i.test(all)) fuel = "e85";
     else {
       const oc = all.match(/\b(87|88|89|91|92|93)\b(?:\s*oct)?/);
-      if (/premium|super|supreme|plus|regular|unl|unleaded|octane/i.test(all) || oc) { fuel = "gas"; octane = oc ? Number(oc[1]) : /premium|super|supreme/i.test(all) ? 93 : null; }
+      // Race fuel from a track pump: 94 up to 125, only when it's written next to "octane" or a race fuel's name, so a
+      // store number (RaceTrac #123) isn't taken for one.
+      const R = "(9[4-9]|1[01]\\d|12[0-5])";
+      const race = all.match(new RegExp(`\\b${R}\\s*oct(?:ane)?\\b`, "i")) || all.match(new RegExp(`\\b(?:octane|race\\s*(?:fuel|gas)|racing\\s*fuel|maximal)\\b[^0-9]{0,12}${R}\\b`, "i"))
+        || all.match(/\bsupreme\b[^0-9]{0,6}(1[01]\d|12[0-5])\b/i);
+      if (race) { fuel = "gas"; octane = Number(race[1]); }
+      else if (/premium|super|supreme|plus|regular|unl|unleaded|octane/i.test(all) || oc) { fuel = "gas"; octane = oc ? Number(oc[1]) : /premium|super|supreme/i.test(all) ? 93 : null; }
       if (/ethanol\s*free|\bE\s*-?\s*0\b|rec(?:reational)?\s*fuel/i.test(all)) { fuel = fuel || "gas"; ethanol = 0; }
       else if (/\bE\s*-?\s*15\b/i.test(all)) ethanol = 15;
     }
@@ -321,7 +332,7 @@
     };
   }
 
-  root.Calc = { TANK, BAND, GRADES, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, keyFor, withDefaults, maxTarget,
+  root.Calc = { TANK, BAND, GRADES, MAX_OCTANE, MAX_PRICE, TUNE_LIMITS, COMMON_OILS, FACTORY_FILTER, DEFAULT_SETTINGS, num, clamp, r1, stationKey, keyFor, withDefaults, maxTarget,
     gasEthanol, seasonalDefault, stopTotals, e85Assumption, plan, bandOf, deriveRows, summarize, addMonths, oilStatus, parseReceiptText,
     BRANDS: STATION_BRANDS, brandFix, tidyBrand, tidyStreet, splitAddress, hasStreetNumber, cleanStation };
 })(typeof window !== "undefined" ? window : globalThis);

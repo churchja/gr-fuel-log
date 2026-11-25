@@ -11,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 32, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 33, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -413,13 +413,13 @@
         <section class="card">
           <div class="grid2">
             <label class="field" for="f-date">Date<input id="f-date" type="date" data-f="date" value="${esc(f.date)}" required></label>
-            <label class="field" for="f-odo">Odometer<input id="f-odo" type="number" inputmode="decimal" data-f="odometer" value="${esc(f.odometer)}"${!f.id && lastFill() ? ` placeholder="Last: ${miles(lastFill().odometer)}"` : ""} aria-describedby="f-odo-hint"></label>
+            <label class="field" for="f-odo">Odometer<input id="f-odo" type="number" min="0" inputmode="decimal" data-f="odometer" value="${esc(f.odometer)}"${!f.id && lastFill() ? ` placeholder="Last: ${miles(lastFill().odometer)}"` : ""} aria-describedby="f-odo-hint"></label>
           </div>
           ${(() => { const h = odoHint(); return h.text ? `<p id="f-odo-hint" class="small ${h.warn ? "note-warn" : "muted"}" aria-live="polite">${esc(h.text)}</p>` : `<p id="f-odo-hint" class="small muted" aria-live="polite"></p>`; })()}
           <h2>Before filling</h2>
           <div class="grid2">
-            <label class="field" for="f-dte">Miles to empty<input id="f-dte" type="number" inputmode="decimal" data-f="dte" value="${esc(f.dte)}"></label>
-            <label class="field" for="f-before">Flex sensor (%)<input id="f-before" type="number" inputmode="decimal" data-f="sensor_before" value="${esc(f.sensor_before)}"></label>
+            <label class="field" for="f-dte">Miles to empty<input id="f-dte" type="number" min="0" inputmode="decimal" data-f="dte" value="${esc(f.dte)}"></label>
+            <label class="field" for="f-before">Flex sensor (%)<input id="f-before" type="number" min="0" max="100" inputmode="decimal" data-f="sensor_before" value="${esc(f.sensor_before)}"></label>
           </div>
         </section>
         <section class="card">
@@ -429,7 +429,7 @@
         </section>
         <section class="card">
           <h2>After filling</h2>
-          <label class="field" for="f-after">Flex sensor after the fill (%)<input id="f-after" type="number" inputmode="decimal" data-f="sensor_after" value="${esc(f.sensor_after)}" placeholder="Add once the gauge settles"></label>
+          <label class="field" for="f-after">Flex sensor after the fill (%)<input id="f-after" type="number" min="0" max="100" inputmode="decimal" data-f="sensor_after" value="${esc(f.sensor_after)}" placeholder="Add once the gauge settles"></label>
           <label class="check" for="f-full"><input id="f-full" type="checkbox" data-f="full" ${f.full ? "checked" : ""}>Filled to full</label>
           <label class="field" for="f-notes">Notes<textarea id="f-notes" data-f="notes" rows="2">${esc(f.notes)}</textarea></label>
         </section>
@@ -450,16 +450,16 @@
       ${S.form.confirmStop === i ? (() => { const g = num(st.gallons), t = num(st.total) ?? (g !== null && num(st.price) !== null ? g * num(st.price) : null); const what = [g !== null ? `${g.toFixed(2)} gal` : "", t !== null ? money(t) : ""].filter(Boolean).join(", ");
         return `<div class="confirm" role="alert"><span class="grow">Delete stop ${i + 1}${what ? ` (${what})` : ""}?</span><button type="button" class="btn danger" data-act="removeStop" data-i="${i}">Delete</button><button type="button" class="btn" data-act="keepStop">Keep</button></div>`; })() : ""}
       <div class="seg" role="group" aria-label="Fuel for stop ${i + 1}">${kinds.map(([k, l]) => `<button type="button" data-act="stopKind" data-i="${i}" data-k="${k}" aria-pressed="${st.kind === k}">${esc(l)}</button>`).join("")}</div>
-      ${st.kind === "gas" ? `<div class="${num(st.ethanol) !== null ? "grid2" : "stack"}"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${C.GRADES.map((g) => `<option value="${g}" ${Number(st.grade) === g ? "selected" : ""}>${g} octane</option>`).join("")}</select></label>
-        ${num(st.ethanol) !== null ? `<label class="field" for="ge${i}">Ethanol %<input id="ge${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" placeholder="${C.gasEthanol(s, st.grade)}"></label>` : ""}</div>` : ""}
+      ${st.kind === "gas" ? `<div class="${num(st.ethanol) !== null ? "grid2" : "stack"}"><label class="field" for="g${i}">Grade<select id="g${i}" data-s="grade" data-i="${i}">${gradeList(st.grade).map((g) => `<option value="${g}" ${Number(st.grade) === g ? "selected" : ""}>${g} octane</option>`).join("")}</select></label>
+        ${num(st.ethanol) !== null ? `<label class="field" for="ge${i}">Ethanol %<input id="ge${i}" type="number" min="0" max="100" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" placeholder="${C.gasEthanol(s, st.grade)}"></label>` : ""}</div>` : ""}
       ${st.kind === "other" ? `<div class="grid2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)"><label class="field" for="fn${i}">What fuel<input id="fn${i}" type="text" data-s="fuelName" data-i="${i}" value="${esc(st.fuelName)}" placeholder="Race fuel, blender pump E30…"></label>
-        <label class="field" for="oe${i}">Ethanol %<input id="oe${i}" type="number" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" class="${hl("ethanol")}"></label></div>
+        <label class="field" for="oe${i}">Ethanol %<input id="oe${i}" type="number" min="0" max="100" inputmode="decimal" data-s="ethanol" data-i="${i}" value="${esc(st.ethanol ?? "")}" class="${hl("ethanol")}"></label></div>
         <p class="note">For ethanol-free gas, race fuel, a blender pump or any blend that isn't your usual. The math uses the ethanol % you enter.</p>` : ""}
       <div class="field"><span id="stl${i}">Station</span><button type="button" id="st${i}" class="pickbtn ${hl("station")}" data-act="pickStation" data-i="${i}" aria-labelledby="stl${i} st${i}"><span class="stack" style="gap:2px;min-width:0">${st.station ? esc(st.station) : `<span class="muted">Choose station</span>`}${st.station && !st.station_id ? `<span class="small muted">Not matched to the shared list. Tap to match it.</span>` : ""}</span>${icon("chevron", 18)}</button></div>
       <div class="grid3">
-        <label class="field" for="ga${i}">Gallons<input id="ga${i}" type="number" inputmode="decimal" step="0.001" data-s="gallons" data-i="${i}" value="${esc(st.gallons)}" class="${hl("gallons")}"${planGalHint(i)}></label>
-        <label class="field" for="pr${i}">$ per gal<input id="pr${i}" type="number" inputmode="decimal" step="0.001" data-s="price" data-i="${i}" value="${esc(st.price)}" class="${hl("price")}"></label>
-        <label class="field" for="to${i}">Total $<input id="to${i}" type="number" inputmode="decimal" step="0.01" data-s="total" data-i="${i}" value="${esc(st.total)}" class="${hl("total")}" placeholder="auto"></label>
+        <label class="field" for="ga${i}">Gallons<input id="ga${i}" type="number" min="0" inputmode="decimal" step="0.001" data-s="gallons" data-i="${i}" value="${esc(st.gallons)}" class="${hl("gallons")}"${planGalHint(i)}></label>
+        <label class="field" for="pr${i}">$ per gal<input id="pr${i}" type="number" min="0" inputmode="decimal" step="0.001" data-s="price" data-i="${i}" value="${esc(st.price)}" class="${hl("price")}"></label>
+        <label class="field" for="to${i}">Total $<input id="to${i}" type="number" min="0" inputmode="decimal" step="0.01" data-s="total" data-i="${i}" value="${esc(st.total)}" class="${hl("total")}" placeholder="auto"></label>
       </div>
       ${mode !== "off" ? `<input type="file" accept="image/*" capture="environment" id="ph${i}" data-photo="${i}" hidden><input type="file" accept="image/*" id="pl${i}" data-photo="${i}" hidden>
         <div class="row" style="align-items:center"><button type="button" class="btn" data-act="scan" data-i="${i}" ${st.busy ? "disabled" : ""}>${st.busy ? '<span class="spinner"></span>' : icon("camera", 20)}Scan receipt</button><button type="button" class="link" data-act="pickPhoto" data-i="${i}" ${st.busy ? "disabled" : ""}>Choose a photo</button></div>` : ""}
@@ -481,6 +481,8 @@
     if (!g || f.stops.findIndex((x) => x.kind === st.kind) !== i) return "";
     return ` placeholder="${esc(g)}" aria-description="Pump plan: ${esc(g.replace("~", "about "))} gallons"`;
   }
+  // The pump grades, plus a stop's own grade when it isn't one of them (race fuel read from a receipt, like 110).
+  const gradeList = (g) => (num(g) !== null && !C.GRADES.includes(num(g)) ? [...C.GRADES, num(g)].sort((a, b) => a - b) : C.GRADES);
   function cleanStops(stops) {
     return stops.map((st) => {
       const g = num(st.gallons), p = num(st.price); let t = num(st.total);
@@ -498,10 +500,16 @@
     if (!/^\d{4}-\d\d-\d\d$/.test(f.date)) return fail("Enter the fill date.");
     const odo = num(f.odometer);
     if (odo === null ? !(f.id && f.noOdo) : odo <= 0) return fail("Enter the odometer reading.");
+    if (odo !== null && odo >= 2000000) return fail("Check the odometer reading. It's over 2 million miles.");
+    const dte = num(f.dte);
+    if (dte !== null && dte < 0) return fail("Miles to empty can't be negative.");
+    if (dte !== null && dte >= 1000) return fail("Check the miles to empty. It's 1,000 or more.");
     const stops = cleanStops(f.stops);
     if (!stops.length) return fail("Add the gallons for at least one pump stop.");
-    if (stops.some((s) => s.gallons === null || s.gallons < 0)) return fail("Every pump stop needs its gallons.");
+    if (stops.some((s) => s.gallons === null)) return fail("Every pump stop needs its gallons.");
+    if (stops.some((s) => s.gallons < 0 || (s.price !== null && s.price < 0) || (s.total !== null && s.total < 0))) return fail("Gallons, prices and totals can't be negative.");
     if (stops.some((s) => s.kind === "other" && (s.ethanol === null || s.ethanol < 0 || s.ethanol > 100))) return fail("Enter the ethanol % for each Other fuel stop.");
+    if (stops.some((s) => s.kind === "gas" && s.ethanol !== undefined && (s.ethanol < 0 || s.ethanol > 100))) return fail("The gas ethanol % must be between 0 and 100.");
     const gallons = stops.reduce((a, s) => a + s.gallons, 0);
     const tank = V.tank(carModel());
     if (gallons > tank + 1) return fail(`That's ${gallons.toFixed(2)} gal, more than the ${tank} gal tank holds. Check the gallons.`);
@@ -543,16 +551,19 @@
     const st = S.form.stops[i]; st.hl = {};
     const filled = [];
     if (r.fuel === "e85" || r.fuel === "E85") { st.kind = "e85"; filled.push("fuel"); }
-    else if (r.fuel === "gas") { st.kind = "gas"; if (r.octane) st.grade = r.octane; filled.push("fuel"); }
+    else if (r.fuel === "gas") { st.kind = "gas"; const oct = num(r.octane); if (oct !== null && oct > 0 && oct <= C.MAX_OCTANE) st.grade = oct; filled.push("fuel"); }
     else if (r.fuel === "other") st.kind = "other";
-    if (num(r.ethanol ?? r.ethanol_percent) !== null && st.kind !== "e85") st.ethanol = num(r.ethanol ?? r.ethanol_percent);
+    // A read with an impossible ethanol % (over 100 is more than pure ethanol) or octane is ignored. Race fuel octane
+    // runs past 100, up to C.MAX_OCTANE.
+    const eth = num(r.ethanol ?? r.ethanol_percent);
+    if (eth !== null && eth >= 0 && eth <= 100 && st.kind !== "e85") st.ethanol = eth;
     if (r.station) {
       if (!st.station_id) { const m = matchKnown(r.station); if (m) { st.station = m.name; st.station_id = m.id; } else st.station = matchStation(r.station); }
       st.hl.station = 1; filled.push("station");
     }
     const g = num(r.gallons), p = num(r.price ?? r.price_per_gallon), t = num(r.total);
     if (g !== null && g > 0 && g < 40) { st.gallons = String(g); st.hl.gallons = 1; filled.push("gallons"); } else st.hl.gallons = "missing";
-    if (p !== null && p > 0 && p < 15) { st.price = String(p); st.hl.price = 1; filled.push("price"); }
+    if (p !== null && p > 0 && p <= C.MAX_PRICE) { st.price = String(p); st.hl.price = 1; filled.push("price"); }
     if (t !== null && t > 0 && t < 400) { st.total = String(t); st.totalManual = true; st.hl.total = 1; filled.push("total"); }
     if (i === 0 && !S.form.id && /^\d{4}-\d\d-\d\d$/.test(r.date || "")) S.form.date = r.date;
     const ok = filled.includes("gallons") && (filled.includes("price") || filled.includes("total"));
@@ -748,7 +759,7 @@
     const isOil = r.key === "oil", { mine, common } = oilChoices();
     const filters = [...new Set([factoryFilter(), ...(S.settings.filterTypes || []), ...S.oil.map((o) => o.filter_type)].filter(Boolean))];
     const opt = (v, label = v) => `<option value="${esc(v)}" ${f.oil === v ? "selected" : ""}>${esc(label)}</option>`;
-    const base = V.items(carModel(), S.settings.year, S.settings.trans).find((x) => x.key === r.key) || V.oilItem(carModel());
+    const base = svcBase(r.key);
     const every = (it) => `every ${miles(it.miles)} miles or ${it.months} months`;
     const status = r.level === "off" ? `<section class="card"><p class="muted">This reminder is off.</p></section>` : r.dueMiles === null ? `<section class="card"><p class="muted">Starts counting after your first fill, when the app knows your odometer.</p></section>`
       : `<section class="dark"><div class="head"><h2>Next due</h2>${r.level === "ok" ? `<span class="chip on">OK</span>` : svcChip(r)}</div>
@@ -761,7 +772,7 @@
       ${status}
       <form class="card" data-form="saveOil" novalidate><h2>${f.id ? "Edit this entry" : "Mark it done"}</h2>
         <div class="grid2"><label class="field" for="o-date">Date<input id="o-date" type="date" data-o="date" value="${esc(f.date)}"></label>
-          <label class="field" for="o-odo">Odometer<input id="o-odo" type="number" inputmode="decimal" data-o="odometer" value="${esc(f.odometer)}"></label></div>
+          <label class="field" for="o-odo">Odometer<input id="o-odo" type="number" min="0" inputmode="decimal" data-o="odometer" value="${esc(f.odometer)}"></label></div>
         ${isOil ? `<label class="field" for="o-oil">Oil<select id="o-oil" data-o="oil">
           <option value="" ${!f.oil ? "selected" : ""} disabled>Choose an oil</option>
           ${mine.length ? `<optgroup label="Your oils">${mine.map((o) => opt(o)).join("")}</optgroup>` : ""}
@@ -777,8 +788,8 @@
       </form>
       <form class="card" data-form="saveRem" novalidate><h2>Reminder</h2>
         <label class="check" for="rem-on"><input id="rem-on" type="checkbox" data-rem="on" ${rem.on ? "checked" : ""}><b>Remind me</b></label>
-        <div class="grid2"><label class="field" for="rem-mi">Every (miles)<input id="rem-mi" type="number" inputmode="numeric" data-rem="miles" value="${esc(rem.miles)}"></label>
-          <label class="field" for="rem-mo">Or every (months)<input id="rem-mo" type="number" inputmode="decimal" data-rem="months" value="${esc(rem.months)}"></label></div>
+        <div class="grid2"><label class="field" for="rem-mi">Every (miles)<input id="rem-mi" type="number" inputmode="numeric" min="1" data-rem="miles" value="${esc(rem.miles)}"></label>
+          <label class="field" for="rem-mo">Or every (months)<input id="rem-mo" type="number" inputmode="decimal" min="1"${monthsCap(base) ? ` max="${monthsCap(base)}"` : ""} step="any" data-rem="months" value="${esc(rem.months)}"></label></div>
         <p class="small muted">${r.practice ? "Owner practice" : "Toyota's schedule"}: ${every(base)}.${r.custom ? " You've set your own." : ""}</p>
         ${rem.error ? `<p class="note-err" role="alert">${esc(rem.error)}</p>` : ""}
         <button class="btn" type="submit">Save reminder</button>
@@ -791,6 +802,7 @@
     const oil = f.customOil ? String(f.oilOwn || "").trim() : f.oil, filter = f.customFilter ? String(f.filterOwn || "").trim() : f.filter;
     if (!/^\d{4}-\d\d-\d\d$/.test(f.date)) { f.error = "Enter the date."; return render(); }
     const odo = num(f.odometer); if (odo === null || odo <= 0) { f.error = "Enter the odometer reading."; return render(); }
+    if (odo >= 2000000) { f.error = "Check the odometer reading. It's over 2 million miles."; return render(); }
     if (isOil && !oil) { f.error = "Choose or add the oil."; return render(); }
     const row = { item: f.item || "oil", date: f.date, odometer: odo, oil_type: isOil ? oil : null, filter_type: isOil ? filter || null : null, notes: String(f.notes || "").trim() || null };
     const res = f.id ? await sb.from("oil_changes").update(row).eq("id", f.id) : await sb.from("oil_changes").insert(row);
@@ -803,11 +815,16 @@
     if (JSON.stringify(s) !== JSON.stringify(S.settings)) await saveSettings(s);
     S.oilForm = null; S.remForm = null; S.svc = null; S.flash = "Saved."; await reloadFills(); render(); window.scrollTo(0, 0);
   }
+  // Toyota's schedule for one service on this car.
+  function svcBase(key) { return V.items(carModel(), S.settings.year, S.settings.trans).find((x) => x.key === key) || V.oilItem(carModel()); }
+  // An owner's own reminder: any number of miles from 1 up, and 1 to 12 months for a service Toyota schedules within
+  // a year (oil, tire rotation). Longer ones (brake fluid every 24 months, coolant every 60) take 1 month or more.
+  const monthsCap = (it) => (it.months <= 12 ? 12 : null);
   async function saveRem() {
     const rem = S.remForm, key = rem.key; rem.error = "";
-    const mi = num(rem.miles), mo = num(rem.months);
-    if (rem.on && (!(mi >= 500 && mi <= 200000) || !(mo >= 1 && mo <= 180))) { rem.error = "Check the miles and months."; return render(); }
-    const base = V.items(carModel(), S.settings.year, S.settings.trans).find((x) => x.key === key) || V.oilItem(carModel());
+    const mi = num(rem.miles), mo = num(rem.months), base = svcBase(key), cap = monthsCap(base);
+    if (rem.on && !(mi >= 1)) { rem.error = "Enter the miles as a number, 1 or more."; return render(); }
+    if (rem.on && !(mo >= 1 && (cap === null || mo <= cap))) { rem.error = cap ? `Enter the months as a number from 1 to ${cap}.` : "Enter the months as a number, 1 or more."; return render(); }
     const own = rem.on && (mi !== base.miles || mo !== base.months);
     const s = { ...S.settings, service: { ...(S.settings.service || {}) } };
     const entry = { ...(s.service[key] || {}) };
@@ -1032,8 +1049,8 @@
       <section class="dark"><h2>Receipt budget · this month</h2><div class="head"><span class="big" style="font:700 30px/1 var(--display)">${a.month_reads} of ${miles(c.claude_monthly_cap || 0)}</span><span class="small soft">Claude reads · about $${(a.month_reads * 0.0005).toFixed(2)}</span></div>
         <div class="bar"><div class="fill" style="width:${pct.toFixed(1)}%"></div></div><p class="small soft">Each owner gets ${c.claude_daily_per_user} Claude reads a day. At the monthly cap, everyone falls back to phone reading.</p></section>
       <form class="card" data-form="saveRules" novalidate><h2>Rules</h2>
-        <div class="grid2"><label class="field" for="r-h">Hold after (sign-ups per hour)<input id="r-h" type="number" value="${c.pace_per_hour}"></label><label class="field" for="r-d">Hold after (per day)<input id="r-d" type="number" value="${c.pace_per_day}"></label>
-          <label class="field" for="r-u">Claude reads per owner per day<input id="r-u" type="number" value="${c.claude_daily_per_user}"></label><label class="field" for="r-m">Claude reads per month, everyone<input id="r-m" type="number" value="${c.claude_monthly_cap}"></label></div>
+        <div class="grid2"><label class="field" for="r-h">Hold after (sign-ups per hour)<input id="r-h" type="number" inputmode="numeric" min="1" value="${c.pace_per_hour}"></label><label class="field" for="r-d">Hold after (per day)<input id="r-d" type="number" inputmode="numeric" min="1" value="${c.pace_per_day}"></label>
+          <label class="field" for="r-u">Claude reads per owner per day<input id="r-u" type="number" inputmode="numeric" min="0" value="${c.claude_daily_per_user}"></label><label class="field" for="r-m">Claude reads per month, everyone<input id="r-m" type="number" inputmode="numeric" min="0" value="${c.claude_monthly_cap}"></label></div>
         <label class="check" for="r-hold"><input id="r-hold" type="checkbox" ${c.hold_all ? "checked" : ""}>Hold every new sign-up for now</label>
         <button class="btn" type="submit">Save rules</button></form>
       <section class="card"><h2>Warnings</h2>${a.alerts.length ? a.alerts.map((x) => `<p class="small"><b>${fmtShort(x.created_at)}</b> · ${esc(x.message)} <span class="muted">${x.emailed_at ? "Emailed." : x.email_error ? "Not emailed: " + esc(x.email_error) : "Sending…"}</span></p>`).join("") : `<p class="small muted">No warnings.</p>`}
@@ -1639,8 +1656,12 @@
     if (el.dataset.act === "pickerChoose" && S.picker && S.picker.swiped) { S.picker.swiped = null; return renderPicker(); }
     const fn = ACT[el.dataset.act]; if (fn) fn(el, e);
   });
+  // No number in the app is ever negative or written with an exponent, so those keys do nothing in a number box,
+  // and a pasted negative loses its minus sign.
+  document.addEventListener("keydown", (e) => { if (e.target && e.target.type === "number" && ["-", "+", "e", "E"].includes(e.key)) e.preventDefault(); });
   document.addEventListener("input", (e) => {
     const el = e.target;
+    if (el.type === "number" && el.value.startsWith("-")) el.value = el.value.slice(1);
     if (el.dataset.pump) { S.pump[el.dataset.pump] = el.value; renderReadout(); return; }
     if (el.id === "pickQ" && S.picker) { const p = S.picker; p.q = el.value; clearTimeout(p.st); if (p.q.trim().length < 3) p.search = null; renderPicker(); p.st = setTimeout(() => searchStations(p, p.q), 350); return; }
     if (el.dataset.se && S.stEdit) { S.stEdit[el.dataset.se] = el.value; const h = $("#stHints"); if (h) h.innerHTML = nameHints(S.stEdit.brand, S.stEdit.street, "stBrandFix"); return; }
@@ -1689,9 +1710,16 @@
       else if (k === "pickSave") await pickerSave();
       else if (k === "stSave") await saveStationName();
       else if (k === "saveRules") {
-        const v = (id) => Number($(id).value);
-        await sb.rpc("admin_update_config", { p_pace_hour: v("#r-h"), p_pace_day: v("#r-d"), p_hold_all: $("#r-hold").checked, p_daily: v("#r-u"), p_monthly: v("#r-m") });
-        S.flash = "Rules saved."; await loadAdmin();
+        // Whole numbers only: sign-up pace 1 or more, Claude reads 0 or more (0 turns Claude reading off). An empty box
+        // is a mistake, not a 0.
+        const v = (id) => num($(id).value), whole = (x, min) => x !== null && Number.isInteger(x) && x >= min;
+        const r = { h: v("#r-h"), d: v("#r-d"), u: v("#r-u"), m: v("#r-m") };
+        if (!whole(r.h, 1) || !whole(r.d, 1)) toast("Sign-ups per hour and per day must be whole numbers, 1 or more.");
+        else if (!whole(r.u, 0) || !whole(r.m, 0)) toast("Claude reads must be whole numbers, 0 or more.");
+        else {
+          const { error } = await sb.rpc("admin_update_config", { p_pace_hour: r.h, p_pace_day: r.d, p_hold_all: $("#r-hold").checked, p_daily: r.u, p_monthly: r.m });
+          S.flash = error ? "Couldn't save the rules. Check your connection and try again." : "Rules saved."; await loadAdmin();
+        }
       }
     } finally { if (btn && btn.isConnected) btn.disabled = false; }
   });

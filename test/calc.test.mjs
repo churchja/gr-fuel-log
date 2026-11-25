@@ -31,6 +31,16 @@ const r = C.parseReceiptText(`MOTOMART #1234\n6328 E LLOYD EXPY\nEVANSVILLE IN\n
 t("receipt: gallons/price/total/fuel/date/station", r.gallons === 5.312 && r.price === 2.379 && r.total === 12.64 && r.fuel === "e85" && r.date === "2026-11-05" && /MOTOMART/.test(r.station) && r.confident, r);
 const r2 = C.parseReceiptText(`COSTCO WHOLESALE\nCROSS POINTE\nPUMP 7 PREMIUM\n5.100 G @ 3.299\nTOTAL 16.82`);
 t("receipt: premium -> gas 93 and @ price", r2.fuel === "gas" && r2.octane === 93 && r2.gallons === 5.1 && r2.price === 3.299 && r2.total === 16.82, r2);
+// Race fuel from a track pump: octane past 100, prices past $10 a gallon, and a store number isn't an octane
+const rf1 = C.parseReceiptText(`TRACK FUEL\nPUMP 2 RACE FUEL 110\n5.000 G @ 11.499\nTOTAL 57.50`);
+t("receipt: race fuel 110 at $11.499", rf1.fuel === "gas" && rf1.octane === 110 && rf1.price === 11.499 && rf1.total === 57.5, rf1);
+const rf2 = C.parseReceiptText(`SUNOCO\nSUPREME 112\nGALLONS 4.000\nPRICE/GAL $12.99\nTOTAL 51.96`);
+t("receipt: Sunoco Supreme 112", rf2.fuel === "gas" && rf2.octane === 112 && rf2.price === 12.99, rf2);
+const rf3 = C.parseReceiptText(`VP RACING FUELS\n116 OCTANE\nGALLONS 3.000\nPRICE/GAL $18.50\nTOTAL 55.50`);
+t("receipt: 116 octane at $18.50", rf3.octane === 116 && rf3.price === 18.5, rf3);
+const rf4 = C.parseReceiptText(`RACETRAC #123\nPUMP 5 PREMIUM 93\nGALLONS 5.000\nPRICE/GAL $3.599\nTOTAL 18.00`);
+t("receipt: store number #123 isn't an octane", rf4.octane === 93, rf4);
+t("octane and price limits", C.MAX_OCTANE === 125 && C.MAX_PRICE === 40, [C.MAX_OCTANE, C.MAX_PRICE]);
 // Oil status
 const os = C.oilStatus([{ date: "2026-05-18", odometer: 43580 }], [{ odometer: 46340 }], { oilMiles: 3000, oilMonths: 6 }, "2026-11-06");
 t("oil due soon: 240 mi / 12 days", os.milesLeft === 240 && os.daysLeft === 12 && os.level === "soon", os);
