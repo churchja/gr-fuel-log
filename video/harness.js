@@ -13,12 +13,12 @@ const BRANDS = {
 };
 
 // The sample-data client from limitplus1/preview/preview.js, set up for recording: a normal sign-in screen (any email,
-// any code), and a new owner with no fill history.
-function standIn() {
+// any code). The how-to video's owner is new, with no fills; `history` keeps the preview's ten weeks of sample fills.
+function standIn(history) {
   const preview = fs.readFileSync(path.join(ROOT, "limitplus1/preview/preview.js"), "utf8");
   return `window.PARTNER = { logo: { light: "", dark: "" } };\n${preview}\ndelete window.PARTNER;
 (function () {
-  window.__preview.data().seeded = true; // a new owner: no sample fills
+  ${history ? "" : "window.__preview.data().seeded = true; // a new owner: no sample fills"}
   const make = window.supabase.createClient;
   window.supabase.createClient = function () {
     const c = make.apply(null, arguments);
@@ -35,7 +35,7 @@ function receiptText(date) {
   return `THORNTONS #343\n911 TEK DR\nCRYSTAL LAKE IL\n${m}/${d}/${y.slice(2)} 5:41 PM\nPUMP 04 E85 FLEX FUEL\nGALLONS 5.612\nPRICE/GAL $2.399\nFUEL SALE $13.46\nVISA ****1234`;
 }
 
-async function route(ctx) {
+async function route(ctx, { history = false } = {}) {
   const outside = [];
   await ctx.route("**/*", (r) => {
     const u = r.request().url();
@@ -45,7 +45,7 @@ async function route(ctx) {
       const p = path.join(ROOT, rel);
       return fs.existsSync(p) && fs.statSync(p).isFile() ? r.fulfill({ path: p }) : r.fulfill({ status: 404, body: "" });
     }
-    if (u.includes("supabase-js")) return r.fulfill({ contentType: "application/javascript", body: standIn() });
+    if (u.includes("supabase-js")) return r.fulfill({ contentType: "application/javascript", body: standIn(history) });
     if (u.includes("tesseract")) return r.fulfill({ contentType: "application/javascript", body: fs.readFileSync(path.join(ROOT, "test/mock-tesseract.js"), "utf8") });
     if (/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u)) return r.continue();
     outside.push(u);
