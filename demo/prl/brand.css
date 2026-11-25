@@ -1,0 +1,24 @@
+/* PRL Motorsports's look, read from https://www.prlmotorsports.com. Built by demos/build.js. */
+@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap");
+:root {
+  --bg: #eef0ee; --surface: #ffffff; --sunken: #e4e7e4; --ink: #14181b; --muted: #5a636a; --line: #d3d8d4; --dash: #c3c9c5;
+  --accent: #f0c000; --accent-ink: #1d1700; --accent-text: #7d6200; --highlight: #fff6cc;
+  --good: #1d7349; --good-bg: #dff0e6; --go: #1d7349; --go-ink: #ffffff; --go-edge: #155c39; --low: #1e3a8a; --high: #9b1c1c; --warn: #a8501a; --warn-bg: #f6e6db;
+  --danger: #b0122c; --danger-bg: #fadfe4;
+  --readout: #12171b; --readout-ink: #f0c000; --readout-text: #e8ece9; --readout-dim: #8d979e; --readout-soft: #b4bcc2;
+  --track: #2a333a; --band: #2f8a59; --limit: #ff5a72; --range: #5c4d12;
+  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
+  color-scheme: light;
+}
+:root { --bg: #ffffff; --surface: #ffffff; --sunken: #eef1f3; --ink: #394046; --muted: #5b6670; --line: #dde2e6; --accent: #0079ad; --accent-ink: #ffffff; --accent-text: #0079ad; --highlight: #dff3fb;
+  --go: #394046; --go-ink: #ffffff; --go-edge: #394046; --readout: #1f2428; --readout-ink: #ffffff; --brand: #00a0df; --promo-bg: #00a0df;
+  --display: Barlow, "Segoe UI", sans-serif; --body: Barlow, "Segoe UI", sans-serif; }
+body.signin { background: #ffffff; } body.signin #app { color: #394046; }
+body.signin .soft, body.signin #app > p { color: #5b6670 !important; } body.signin .powered { color: #5b6670; } body.signin .brandmark b { color: #394046; }
+body.signin .card { border: 1px solid #dde2e6; } body.signin .fine { color: #5b6670; }
+.tabs .promo a { color: #06222e; font-weight: 600; } .promo .sep { background: #06222e; }
+.brandbar img { height: 30px; } .signin .brandmark img, .brandmark img { height: 58px; }
+.preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
+.preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+body.signin #app { min-height: calc(100svh - 30px); }

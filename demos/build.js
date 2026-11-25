@@ -32,7 +32,7 @@ for (const [id, b] of Object.entries(BRANDS)) {
 <link rel="stylesheet" href="brand.css?v=${V}">
 </head>
 <body class="partner">
-<div class="preview-ribbon" role="note"><b>Demo</b> · sample data, nothing is saved · <a href="./" data-preview-reset>Start over</a></div>
+<div class="preview-ribbon" role="note"><b>Demo</b> · ${b.lookOnly ? "look only, GR Corolla sample data" : "sample data, nothing is saved"} · <a href="./" data-preview-reset>Start over</a></div>
 <main id="app" aria-live="polite"><p class="muted">Loading…</p></main>
 <div class="tabs" id="tabs" hidden></div>
 <noscript>${b.partner.name} needs JavaScript turned on.</noscript>

@@ -8,9 +8,9 @@ const base = (name, short) => ({
   models: [{ id: "grc", name: "GR Corolla" }, { id: "gr86", name: "GR86 / BRZ" }],
 });
 
-// A brand marked `mockup` only gets mock-up screens (demos/shots.js). demos/build.js builds a locked demo for a brand
-// only once that mark is removed, which happens when Jason approves it. The second batch's cars (BMW, Honda, GM)
-// aren't in the app yet, so their mock-ups show the pump plan and history, not a car's service schedule.
+// A brand marked `mockup` only gets mock-up screens (demos/shots.js); demos/build.js skips it until Jason approves it.
+// A brand marked `lookOnly` is approved, but its cars (BMW, Honda, GM) aren't in the app yet: its demo runs on the
+// GR Corolla sample and says so in the ribbon.
 module.exports = {
   csg: {
     title: "CounterSpace Garage", site: "https://counterspacegarage.com",
@@ -78,7 +78,7 @@ module.exports = {
       .brandbar img { height: 44px; margin-left: -14px; } .signin .brandmark img, .brandmark img { height: 92px; width: auto; margin: -16px 0 -18px 0; justify-self: start; }`,
   },
   burger: {
-    mockup: true, title: "Burger Motorsports", site: "https://burgertuning.com",
+    lookOnly: true, title: "Burger Motorsports", site: "https://burgertuning.com",
     logo: "https://burgertuning.com/cdn/shop/files/burger-motorsports-logo_4438a390-bd5a-4300-b16f-440ec30b6db6.png?height=136",
     scheme: "light", screens: ["welcome", "pump", "history", "about"],
     fonts: "family=Inter:wght@400;500;600&family=Montserrat:wght@600;700",
@@ -92,7 +92,7 @@ module.exports = {
       .brandbar img { height: 34px; } .signin .brandmark img, .brandmark img { height: 62px; }`,
   },
   hondata: {
-    mockup: true, title: "Hondata", site: "https://www.hondata.com",
+    lookOnly: true, title: "Hondata", site: "https://www.hondata.com",
     logo: "https://hondata.com/image/catalog/opencart-logo.png",
     scheme: "light", screens: ["welcome", "pump", "history", "about"],
     fonts: "family=Open+Sans:wght@400;600;700",
@@ -109,7 +109,7 @@ module.exports = {
       .brandbar img { height: 22px; } .signin .brandmark img, .brandmark img { height: 40px; }`,
   },
   prl: {
-    mockup: true, title: "PRL Motorsports", site: "https://www.prlmotorsports.com",
+    lookOnly: true, title: "PRL Motorsports", site: "https://www.prlmotorsports.com",
     logo: "https://prlmotorsports.com/cdn/shop/files/PRL_Logo_Black_500x140_d42eb9cc-8c99-402d-a898-5921e87c9a02_500x.png?v=1655920976",
     scheme: "light", screens: ["welcome", "pump", "history", "about"],
     fonts: "family=Barlow:wght@400;500;600;700",
@@ -126,7 +126,7 @@ module.exports = {
       .brandbar img { height: 30px; } .signin .brandmark img, .brandmark img { height: 58px; }`,
   },
   dsx: {
-    mockup: true, title: "DSX Tuning", site: "https://dsxtuning.com",
+    lookOnly: true, title: "DSX Tuning", site: "https://dsxtuning.com",
     logo: "https://dsxtuning.com/cdn/shop/files/DSX-Logo-Invert.svg?v=1749179520",
     scheme: "light", screens: ["welcome", "pump", "history", "about"],
     fonts: "family=Tomorrow:wght@500;600&family=Source+Code+Pro:wght@400;500;600",

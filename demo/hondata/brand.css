@@ -1,0 +1,24 @@
+/* Hondata's look, read from https://www.hondata.com. Built by demos/build.js. */
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap");
+:root {
+  --bg: #eef0ee; --surface: #ffffff; --sunken: #e4e7e4; --ink: #14181b; --muted: #5a636a; --line: #d3d8d4; --dash: #c3c9c5;
+  --accent: #f0c000; --accent-ink: #1d1700; --accent-text: #7d6200; --highlight: #fff6cc;
+  --good: #1d7349; --good-bg: #dff0e6; --go: #1d7349; --go-ink: #ffffff; --go-edge: #155c39; --low: #1e3a8a; --high: #9b1c1c; --warn: #a8501a; --warn-bg: #f6e6db;
+  --danger: #b0122c; --danger-bg: #fadfe4;
+  --readout: #12171b; --readout-ink: #f0c000; --readout-text: #e8ece9; --readout-dim: #8d979e; --readout-soft: #b4bcc2;
+  --track: #2a333a; --band: #2f8a59; --limit: #ff5a72; --range: #5c4d12;
+  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
+  color-scheme: light;
+}
+:root { --bg: #ffffff; --surface: #ffffff; --sunken: #f0f0f0; --ink: #333333; --muted: #666666; --line: #e2e2e2; --accent: #d12323; --accent-ink: #ffffff; --accent-text: #c82222; --highlight: #fbe3e3;
+  --go: #d12323; --go-ink: #ffffff; --go-edge: #b01c1c; --readout: #212529; --readout-ink: #ffffff; --brand: #d12323; --promo-bg: #d12323;
+  --display: "Open Sans", "Segoe UI", sans-serif; --body: "Open Sans", "Segoe UI", sans-serif; }
+body.signin { background: #ffffff; } body.signin #app { color: #333333; }
+body.signin .soft, body.signin #app > p { color: #666666 !important; } body.signin .powered { color: #666666; } body.signin .brandmark b { color: #333333; }
+body.signin .card { border: 1px solid #e2e2e2; } body.signin .fine { color: #666666; }
+.promo .sale, .promo .tag { color: #ffffff; } .promo .sep { background: #f0b3b3; }
+.brandbar img { height: 22px; } .signin .brandmark img, .brandmark img { height: 40px; }
+.preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
+.preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+body.signin #app { min-height: calc(100svh - 30px); }

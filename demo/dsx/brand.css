@@ -1,0 +1,22 @@
+/* DSX Tuning's look, read from https://dsxtuning.com. Built by demos/build.js. */
+@import url("https://fonts.googleapis.com/css2?family=Tomorrow:wght@500;600&family=Source+Code+Pro:wght@400;500;600&display=swap");
+:root {
+  --bg: #eef0ee; --surface: #ffffff; --sunken: #e4e7e4; --ink: #14181b; --muted: #5a636a; --line: #d3d8d4; --dash: #c3c9c5;
+  --accent: #f0c000; --accent-ink: #1d1700; --accent-text: #7d6200; --highlight: #fff6cc;
+  --good: #1d7349; --good-bg: #dff0e6; --go: #1d7349; --go-ink: #ffffff; --go-edge: #155c39; --low: #1e3a8a; --high: #9b1c1c; --warn: #a8501a; --warn-bg: #f6e6db;
+  --danger: #b0122c; --danger-bg: #fadfe4;
+  --readout: #12171b; --readout-ink: #f0c000; --readout-text: #e8ece9; --readout-dim: #8d979e; --readout-soft: #b4bcc2;
+  --track: #2a333a; --band: #2f8a59; --limit: #ff5a72; --range: #5c4d12;
+  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
+  color-scheme: light;
+}
+:root { --bg: #fdfdfd; --surface: #ffffff; --sunken: #eef1f6; --ink: #0c1e37; --muted: #48566b; --line: #d8dee8; --accent: #063980; --accent-ink: #ffffff; --accent-text: #223e7c; --highlight: #dbe9fb;
+  --go: #063980; --go-ink: #ffffff; --go-edge: #063980; --readout: #0c1e37; --readout-ink: #ffffff; --brand: #2f8fdc; --promo-bg: #063980;
+  --display: Tomorrow, "Segoe UI", sans-serif; --body: "Source Code Pro", ui-monospace, monospace; }
+h1, h2, .btn.primary { text-transform: uppercase; letter-spacing: .03em; } body { font-size: 15px; }
+.brandbar { background: #063980; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 10px 16px; border: 0; } .brandbar span { color: #c7d6ee; }
+.brandbar img { height: 20px; } .signin .brandmark img, .brandmark img { height: 34px; }
+.preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
+.preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+body.signin #app { min-height: calc(100svh - 30px); }
