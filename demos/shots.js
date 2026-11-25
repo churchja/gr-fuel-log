@@ -43,7 +43,8 @@ async function run(browser, id) {
   await page.waitForFunction(() => /gal/.test(document.querySelector("#readout").innerText));
   await page.evaluate(() => document.activeElement && document.activeElement.blur());
   await shot("2-pump");
-  await go("service", "h1:has-text('Service')"); await shot("3-service");
+  if ((b.screens || []).includes("history")) { await go("history", "h1:has-text('History')"); await shot("3-history"); }
+  else { await go("service", "h1:has-text('Service')"); await shot("3-service"); }
   await go("about", "text=E85 stations as of"); await shot("4-about");
   await ctx.close();
   console.log(`${b.title}: 4 screens | outside: ${outside.length ? outside : "none"} | errors: ${errors.length ? errors : "none"}`);

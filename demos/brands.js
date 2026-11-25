@@ -8,6 +8,9 @@ const base = (name, short) => ({
   models: [{ id: "grc", name: "GR Corolla" }, { id: "gr86", name: "GR86 / BRZ" }],
 });
 
+// A brand marked `mockup` only gets mock-up screens (demos/shots.js). demos/build.js builds a locked demo for a brand
+// only once that mark is removed, which happens when Jason approves it. The second batch's cars (BMW, Honda, GM)
+// aren't in the app yet, so their mock-ups show the pump plan and history, not a car's service schedule.
 module.exports = {
   csg: {
     title: "CounterSpace Garage", site: "https://counterspacegarage.com",
@@ -73,5 +76,68 @@ module.exports = {
       .btn { border-radius: 41px; } .stepper { border-radius: 41px; }
       .brandbar { background: #010309; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 8px 16px; border: 0; } .brandbar span { color: #c9cde0; }
       .brandbar img { height: 44px; margin-left: -14px; } .signin .brandmark img, .brandmark img { height: 92px; width: auto; margin: -16px 0 -18px 0; justify-self: start; }`,
+  },
+  burger: {
+    mockup: true, title: "Burger Motorsports", site: "https://burgertuning.com",
+    logo: "https://burgertuning.com/cdn/shop/files/burger-motorsports-logo_4438a390-bd5a-4300-b16f-440ec30b6db6.png?height=136",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Inter:wght@400;500;600&family=Montserrat:wght@600;700",
+    partner: { ...base("Burger Motorsports", "Burger Motorsports"), id: "burger", storageKey: "burger",
+      contact: { website: "https://burgertuning.com", info: "sales@burgertuning.com" },
+      promo: { items: [{ name: "Fuel-It! Bluetooth flex fuel kits", url: "https://burgertuning.com", models: ["grc"] }, { name: "JB4 tuners", url: "https://burgertuning.com", models: ["grc"] }] } },
+    css: `:root { --bg: #f3f4f6; --surface: #ffffff; --sunken: #e9ebee; --ink: #1f1f1f; --muted: #5a5f66; --line: #d9dce1; --accent: #dd2525; --accent-ink: #ffffff; --accent-text: #c01818; --highlight: #fde3e3;
+        --go: #000000; --go-ink: #ffffff; --go-edge: #000000; --readout: #000000; --readout-ink: #ffffff; --brand: #dd2525; --promo-bg: #000000;
+        --display: Montserrat, "Segoe UI", sans-serif; --body: Inter, "Segoe UI", sans-serif; }
+      .brandbar { background: #000000; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 8px 16px; border: 0; } .brandbar span { color: #d0d0d0; }
+      .brandbar img { height: 34px; } .signin .brandmark img, .brandmark img { height: 62px; }`,
+  },
+  hondata: {
+    mockup: true, title: "Hondata", site: "https://www.hondata.com",
+    logo: "https://hondata.com/image/catalog/opencart-logo.png",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Open+Sans:wght@400;600;700",
+    partner: { ...base("Hondata", "Hondata"), id: "hondata", storageKey: "hondata",
+      contact: { phone: "310-782-8278", website: "https://www.hondata.com" },
+      promo: { items: [{ name: "CANFlex flex fuel kit", url: "https://www.hondata.com", models: ["grc"] }, { name: "FlashPro", url: "https://www.hondata.com", models: ["grc"] }] } },
+    css: `:root { --bg: #ffffff; --surface: #ffffff; --sunken: #f0f0f0; --ink: #333333; --muted: #666666; --line: #e2e2e2; --accent: #d12323; --accent-ink: #ffffff; --accent-text: #c82222; --highlight: #fbe3e3;
+        --go: #d12323; --go-ink: #ffffff; --go-edge: #b01c1c; --readout: #212529; --readout-ink: #ffffff; --brand: #d12323; --promo-bg: #d12323;
+        --display: "Open Sans", "Segoe UI", sans-serif; --body: "Open Sans", "Segoe UI", sans-serif; }
+      body.signin { background: #ffffff; } body.signin #app { color: #333333; }
+      body.signin .soft, body.signin #app > p { color: #666666 !important; } body.signin .powered { color: #666666; } body.signin .brandmark b { color: #333333; }
+      body.signin .card { border: 1px solid #e2e2e2; } body.signin .fine { color: #666666; }
+      .promo .sale, .promo .tag { color: #ffffff; } .promo .sep { background: #f0b3b3; }
+      .brandbar img { height: 22px; } .signin .brandmark img, .brandmark img { height: 40px; }`,
+  },
+  prl: {
+    mockup: true, title: "PRL Motorsports", site: "https://www.prlmotorsports.com",
+    logo: "https://prlmotorsports.com/cdn/shop/files/PRL_Logo_Black_500x140_d42eb9cc-8c99-402d-a898-5921e87c9a02_500x.png?v=1655920976",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Barlow:wght@400;500;600;700",
+    partner: { ...base("PRL Motorsports", "PRL Motorsports"), id: "prl", storageKey: "prl",
+      contact: { website: "https://www.prlmotorsports.com", info: "support@prlmotorsports.com" },
+      promo: { items: [{ name: "PRL WiFi flex fuel kits", url: "https://www.prlmotorsports.com", models: ["grc"] }, { name: "PRL intakes and engine mounts", url: "https://www.prlmotorsports.com", models: ["grc"] }] } },
+    css: `:root { --bg: #ffffff; --surface: #ffffff; --sunken: #eef1f3; --ink: #394046; --muted: #5b6670; --line: #dde2e6; --accent: #0079ad; --accent-ink: #ffffff; --accent-text: #0079ad; --highlight: #dff3fb;
+        --go: #394046; --go-ink: #ffffff; --go-edge: #394046; --readout: #1f2428; --readout-ink: #ffffff; --brand: #00a0df; --promo-bg: #00a0df;
+        --display: Barlow, "Segoe UI", sans-serif; --body: Barlow, "Segoe UI", sans-serif; }
+      body.signin { background: #ffffff; } body.signin #app { color: #394046; }
+      body.signin .soft, body.signin #app > p { color: #5b6670 !important; } body.signin .powered { color: #5b6670; } body.signin .brandmark b { color: #394046; }
+      body.signin .card { border: 1px solid #dde2e6; } body.signin .fine { color: #5b6670; }
+      .tabs .promo a { color: #06222e; font-weight: 600; } .promo .sep { background: #06222e; }
+      .brandbar img { height: 30px; } .signin .brandmark img, .brandmark img { height: 58px; }`,
+  },
+  dsx: {
+    mockup: true, title: "DSX Tuning", site: "https://dsxtuning.com",
+    logo: "https://dsxtuning.com/cdn/shop/files/DSX-Logo-Invert.svg?v=1749179520",
+    scheme: "light", screens: ["welcome", "pump", "history", "about"],
+    fonts: "family=Tomorrow:wght@500;600&family=Source+Code+Pro:wght@400;500;600",
+    partner: { ...base("DSX Tuning", "DSX Tuning"), id: "dsx", storageKey: "dsx",
+      contact: { phone: "314-396-7333", website: "https://dsxtuning.com" },
+      promo: { items: [{ name: "DSX flex fuel kits", url: "https://dsxtuning.com", models: ["grc"] }, { name: "Atlas port controllers", url: "https://dsxtuning.com", models: ["grc"] }] } },
+    css: `:root { --bg: #fdfdfd; --surface: #ffffff; --sunken: #eef1f6; --ink: #0c1e37; --muted: #48566b; --line: #d8dee8; --accent: #063980; --accent-ink: #ffffff; --accent-text: #223e7c; --highlight: #dbe9fb;
+        --go: #063980; --go-ink: #ffffff; --go-edge: #063980; --readout: #0c1e37; --readout-ink: #ffffff; --brand: #2f8fdc; --promo-bg: #063980;
+        --display: Tomorrow, "Segoe UI", sans-serif; --body: "Source Code Pro", ui-monospace, monospace; }
+      h1, h2, .btn.primary { text-transform: uppercase; letter-spacing: .03em; } body { font-size: 15px; }
+      .brandbar { background: #063980; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 10px 16px; border: 0; } .brandbar span { color: #c7d6ee; }
+      .brandbar img { height: 20px; } .signin .brandmark img, .brandmark img { height: 34px; }`,
   },
 };

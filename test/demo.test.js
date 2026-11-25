@@ -6,6 +6,7 @@ const W = path.resolve(__dirname, ".."), BRANDS = require("../demos/brands");
 (async () => {
   const browser = await chromium.launch();
   for (const [id, b] of Object.entries(BRANDS)) {
+    if (b.mockup) continue; // no demo is built until it's approved
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: b.scheme });
     const page = await ctx.newPage();
     const errors = [], outside = [];

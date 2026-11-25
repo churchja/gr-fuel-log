@@ -11,6 +11,7 @@ const BASE = { light: appCss.match(/:root \{[\s\S]*?\n\}/)[0], dark: appCss.matc
 const V = fs.readFileSync(path.join(ROOT, "index.html"), "utf8").match(/app\.js\?v=(\d+)/)[1];
 
 for (const [id, b] of Object.entries(BRANDS)) {
+  if (b.mockup) continue; // not approved yet: mock-up screens only
   const dir = path.join(ROOT, "demo", id); fs.mkdirSync(dir, { recursive: true });
   const ext = /\.svg(\?|$)/.test(b.logo) ? "svg" : "png", logo = `logo.${ext}`;
   if (!fs.existsSync(path.join(dir, logo))) execFileSync("curl", ["-s", "-f", "-o", path.join(dir, logo), b.logo]);
