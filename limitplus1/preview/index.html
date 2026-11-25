@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LIMIT+1 Flex Fuel · Preview</title>
+<meta name="description" content="A preview of LIMIT+1 Flex Fuel with sample data. Nothing you enter is saved.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="../icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="../../app.css?v=31">
+<link rel="stylesheet" href="../partner.css?v=1">
+<style>
+  .preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
+  .preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+  body.signin #app { min-height: calc(100svh - 30px); }
+</style>
+</head>
+<body class="partner">
+<div class="preview-ribbon" role="note"><b>Preview</b> · sample data, nothing is saved · <a href="./" data-preview-reset>Start over</a></div>
+<main id="app" aria-live="polite"><p class="muted">Loading…</p></main>
+<div class="tabs" id="tabs" hidden></div>
+<noscript>LIMIT+1 Flex Fuel needs JavaScript turned on.</noscript>
+<script>if (location.protocol === "http:" && !/^(localhost|127\.)|\.test$/.test(location.hostname)) location.replace("https://" + location.host + location.pathname + location.search + location.hash);</script>
+<!-- No database here: preview.js stands in for it with sample data that stays in this tab. -->
+<script src="../partner.js?v=1"></script>
+<script src="preview.js?v=1"></script>
+<script src="../../calc.js?v=31"></script>
+<script src="../../service.js?v=31"></script>
+<script src="../../app.js?v=31"></script>
+</body>
+</html>

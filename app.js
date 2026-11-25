@@ -11,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 30, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 31, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -194,6 +194,11 @@
         <button class="btn primary full" type="submit" ${s.busy ? "disabled" : ""}>${s.busy ? '<span class="spinner"></span>' : ""}Sign in</button>
         <div class="row"><button type="button" class="link" data-act="resend">Send a new code</button><span class="grow"></span><button type="button" class="link" data-act="otherEmail">Use another email</button></div>
       </form>`;
+    // The partner preview (sample data, nothing saved) has no sign-in: one button starts it.
+    if (P && P.preview) return `<div class="stack">${markHtml()}<p class="powered">${esc(P.poweredBy)}</p><p class="soft" style="font-size:17px;color:var(--readout-soft)">${esc(P.tagline)}</p></div>
+      <div class="card stack" style="color: var(--ink)"><p>${esc(P.preview.welcome)}</p><button type="button" class="btn primary full" data-act="previewStart">Start the preview</button></div>
+      <p style="color:var(--readout-soft);font-size:14px">${esc(P.preview.note)}</p>
+      <p class="fine">${esc(P.concept)} ${DISCLAIMER}</p>`;
     if (P) return `<div class="stack">${markHtml()}<p class="powered">${esc(P.poweredBy)}</p><p class="soft" style="font-size:17px;color:var(--readout-soft)">${esc(P.tagline)}</p></div>
       ${form}<p style="color:var(--readout-soft);font-size:14px">No password: you sign in with a code we email you. During the preview, each new account is approved by hand.${CFG.turnstileSiteKey ? " A quick bot check runs first." : ""}</p>
       <p class="fine">${esc(P.concept)} ${DISCLAIMER}</p>`;
@@ -995,6 +1000,7 @@
     if (s.year && num(s.serviceStart) === null && odoNow() > 0) s.serviceStart = odoNow();
     s.target = Math.min(s.target, C.maxTarget(s));
     if (!(await saveSettings(s, String(f.handle || "").trim()))) return fail("Couldn't save. Check your connection and try again.");
+    if (first && P && P.preview) await loadAll(); // the preview's sample log appears once a car is set up
     if (s.year && info.car && !info.checked) sb.rpc("report_unchecked_year", { p_model: carModel(), p_year: s.year }).then(() => {}, () => {});
     S.carForm = null; S.setupDone = true; S.flash = "Settings saved."; refreshLearning(4000); go("pump");
   }
@@ -1623,6 +1629,7 @@
     resend: () => { S.signin.step = "email"; render(); },
     otherEmail: () => { S.signin = { ...S.signin, step: "email", email: "", code: "", error: "" }; render(); },
     signOut: async () => { await sb.auth.signOut({ scope: "local" }); },
+    previewStart: async () => { await sb.auth.signInAnonymously(); },
   };
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-act]"); if (!el) return; e.preventDefault();
@@ -1706,6 +1713,6 @@
   });
   sb.auth.getSession().then(({ data }) => { if (!data.session) { S.ready = true; render(); } });
   watchGeoPermission();
-  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!(P && P.preview) && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {}); // the preview is online only
   render();
 })();

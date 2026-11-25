@@ -63,6 +63,9 @@ node --experimental-strip-types test/model.test.ts
 node --experimental-strip-types test/afdc.test.ts
 node --experimental-strip-types test/e85prices.test.ts
 node test/ui.test.js
+node test/service.test.mjs
+node test/partner.test.js
+node test/preview.test.js
 ```
 
 ## One-time setup (Supabase dashboard)
@@ -110,5 +113,12 @@ A partner version is a folder with its own `index.html`, `partner.js`, `partner.
 loading the shared `app.js`, `calc.js` and `service.js`. `partner.js` sets `window.PARTNER`: name, logo, the cars
 offered, package presets, contact details and the promo bar. Every account must be approved for the partner in Admin
 (`public.partner_access`); requests are emailed to the app's own address. When the shared files' `?v=` number changes,
-change it in the partner's `index.html` and `sw.js` too.
+change it in the partner's `index.html` and `sw.js` too, and in `limitplus1/preview/index.html`.
+
+`limitplus1/preview/` is a preview of LIMIT+1 Flex Fuel for videos and for showing LIMIT+1: the same app with no
+sign-in and no database. `preview.js` stands in for supabase-js with sample data kept in the browser tab
+(sessionStorage), so nothing is sent anywhere and nothing is saved. Its stations are a snapshot of the DOE's public
+E85 list around Crystal Lake, IL; the community, the owner's fills and the prices are made up. Setting up a car
+creates about ten weeks of fills for that car (one lands low after the station's winter blend switch) and an oil
+change and tire rotation coming due. "Start over" or Sign out wipes it.
 
