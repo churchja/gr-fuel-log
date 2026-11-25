@@ -273,7 +273,7 @@ const W = path.resolve(__dirname, "..");
   await page.waitForSelector("text=E85 stations as of");
   const about = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
   log("8e about:", about);
-  if (!/Version 35/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
+  if (!/Version 36/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
   await shot("about");
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");
@@ -451,6 +451,10 @@ const W = path.resolve(__dirname, "..");
   await page.evaluate(() => { location.hash = "more"; }); await page.waitForSelector("text=Signed in as");
   log("19 More:", (await page.locator("nav[aria-label=More] .item").first().innerText()).replace(/\n+/g, " | "));
   expect(/^Service/.test(await page.locator("nav[aria-label=More] .item").first().innerText()) && !/Oil changes/.test(await page.locator("#app").innerText()), "More should list Service, not Oil changes");
+  // More links to the how-to video on YouTube, in a new tab
+  const howTo = await page.locator("nav[aria-label=More] a.item:has-text('How to use the app')").evaluate((a) => ({ href: a.href, target: a.target, rel: a.rel, text: a.innerText.replace(/\n+/g, " | ") }));
+  log("19a how-to link:", JSON.stringify(howTo));
+  expect(howTo.href === "https://www.youtube.com/shorts/j4VIa6ebGZo" && howTo.target === "_blank" && howTo.rel === "noopener" && /A one-minute video on YouTube/.test(howTo.text), "the how-to link is wrong");
   // One receipt switch that keeps whichever way of reading was set; off types the numbers in
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("form[data-form=saveCar] button[type=submit]"); await page.waitForSelector("text=Pump plan");

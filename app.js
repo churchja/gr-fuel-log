@@ -11,11 +11,13 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 35, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 36, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
   const SK = P ? P.storageKey + "-" : ""; // a partner version keeps its own notes on the phone
+  // The how-to video, linked from More. A partner version names its own in partner.js (howTo), or shows none.
+  const HOWTO = P ? P.howTo || "" : "https://www.youtube.com/shorts/j4VIa6ebGZo";
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
   const deviceId = (() => { let id = store.get("device-id"); if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set("device-id", id); } return id; })();
   const ICONS = {
@@ -698,11 +700,12 @@
       ["service", "Service", next && next.dueMiles !== null ? `Next: ${next.name}. ${dueTxt(next)}` : "Oil changes and scheduled service reminders", next ? svcChip(next) : ""],
       ["learned", "What the app has learned", "E85 strength, your sensor, fuel left, accuracy", ""],
       ["car", "Your car and settings", "Model year, target, tune limit, gas, receipts, sharing", ""],
+      ...(HOWTO ? [[HOWTO, "How to use the app", "A one-minute video on YouTube", ""]] : []),
       P ? ["about", "About and contact", `Contact ${P.logo.alt}, the app's version, where its data comes from`, ""] : ["about", "About and disclaimer", "What the app is and where its data comes from", ""],
     ];
     if (isAdmin()) items.push(["admin", "Admin", "Sign-ups, warnings, receipt budget", ""]);
     return `<div class="stack"><h1>More</h1><p class="muted">Signed in as ${esc(S.profile.handle || S.user.email)}</p></div>
-      <nav class="card list" aria-label="More">${items.map(([href, t, d, badge]) => `<a class="item" href="#${href}" style="grid-template-columns:minmax(0,1fr) auto auto;align-items:center"><span class="stack"><span class="t">${t}</span><span class="d">${esc(d)}</span></span>${badge || "<span></span>"}${icon("chevron", 18)}</a>`).join("")}</nav>
+      <nav class="card list" aria-label="More">${items.map(([href, t, d, badge]) => `<a class="item" ${/^https:/.test(href) ? `href="${esc(href)}" target="_blank" rel="noopener"` : `href="#${href}"`} style="grid-template-columns:minmax(0,1fr) auto auto;align-items:center"><span class="stack"><span class="t">${t}</span><span class="d">${esc(d)}</span></span>${badge || "<span></span>"}${icon("chevron", 18)}</a>`).join("")}</nav>
       <button class="btn full" data-act="signOut">Sign out</button>`;
   }
   // ---------- service ----------

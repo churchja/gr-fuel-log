@@ -1,6 +1,6 @@
 // Keeps the app shell available offline so the pump plan opens with no signal. Data always comes from the network.
-const CACHE = "gr-fuel-log-v35";
-const SHELL = ["./", "index.html", "app.css?v=35", "config.js?v=35", "calc.js?v=35", "service.js?v=35", "app.js?v=35", "manifest.webmanifest", "icons/icon-192.png",
+const CACHE = "gr-fuel-log-v36";
+const SHELL = ["./", "index.html", "app.css?v=36", "config.js?v=36", "calc.js?v=36", "service.js?v=36", "app.js?v=36", "manifest.webmanifest", "icons/icon-192.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith("gr-fuel-log-") && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

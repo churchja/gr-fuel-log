@@ -98,12 +98,13 @@ const W = path.resolve(__dirname, "..");
   log("7 about:", about.slice(0, 700));
   log("7a support email:", support.replace(/\n/g, " / "));
   expect(await page.getAttribute("a.item:has-text('Call 815-345-3035')", "href") === "tel:+18153453035" && /Contact form/.test(about) && /limitplus1\.com/.test(about) && /4500 Northwest Hwy, Suite 800, Crystal Lake, IL 60014/.test(about), "contact details missing");
-  expect(/^mailto:support@limitplus1\.com\?subject=LIMIT\+1 Flex Fuel: support request&body=App: LIMIT\+1 Flex Fuel, version 35\nCar: 2024 GR86 \/ BRZ \(automatic\)\nPackage: Power Package 2\nTune limit: E50 \(not sure\), target E40/.test(support), "support email wrong");
-  expect(/Version 35/.test(about) && /Powered by Shady Acres LLC\./.test(about) && /A concept by Shady Acres LLC/.test(about), "version, Powered by or concept note missing");
+  expect(/^mailto:support@limitplus1\.com\?subject=LIMIT\+1 Flex Fuel: support request&body=App: LIMIT\+1 Flex Fuel, version 36\nCar: 2024 GR86 \/ BRZ \(automatic\)\nPackage: Power Package 2\nTune limit: E50 \(not sure\), target E40/.test(support), "support email wrong");
+  expect(/Version 36/.test(about) && /Powered by Shady Acres LLC\./.test(about) && /A concept by Shady Acres LLC/.test(about), "version, Powered by or concept note missing");
   await shot("about");
   // More names the About page for LIMIT+1
   await page.evaluate(() => { location.hash = "more"; }); await page.waitForSelector("text=Signed in as");
   expect(/About and contact/.test(await text()), "More should list About and contact");
+  expect(!(await page.locator("a.item:has-text('How to use the app')").count()), "LIMIT+1's More shouldn't link GR Fuel Log's how-to video");
   // Admin: requests to use the partner version, with Approve
   await page.evaluate(() => { window.__partnerList = [{ user_id: "u-kevin", partner: "limitplus1", partner_name: "LIMIT+1 Flex Fuel", status: "pending", requested_at: "2026-11-25T15:00:00Z", email: "kevin@example.com", handle: null }]; location.hash = "admin"; });
   await page.waitForSelector("text=Partner versions · 1 waiting");
