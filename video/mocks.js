@@ -51,7 +51,11 @@ const share = (f) => f.evaluate(() => {
     </div>
     <button type="button" class="btn primary full">Share</button>
   </div>`;
+  // It slides up like a real sheet.
+  const panel = sheet.firstElementChild;
+  sheet.style.opacity = "0"; sheet.style.transition = "opacity .25s"; panel.style.transform = "translateY(100%)"; panel.style.transition = "transform .32s ease-out";
   document.body.appendChild(sheet);
+  requestAnimationFrame(() => requestAnimationFrame(() => { sheet.style.opacity = "1"; panel.style.transform = "none"; }));
 });
 
 const clear = (f) => f.evaluate(() => document.querySelectorAll("#mock-tuner, #mock-shop, #mock-share").forEach((x) => x.remove()));

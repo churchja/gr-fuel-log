@@ -56,4 +56,33 @@ async function route(ctx, { history = false } = {}) {
 
 async function launch() { return chromium.launch(); }
 
-module.exports = { ROOT, BASE, OUT, BRANDS, launch, route, receiptText };
+const FPS = 30;
+// Starts capturing a page: the browser sends a picture whenever the screen changes, and the latest one is written
+// 30 times a second into `raw`. Returns the start time and a stop() to call when the last scene ends.
+async function capture(ctx, page, size, raw) {
+  const { spawn } = require("child_process");
+  const cdp = await ctx.newCDPSession(page);
+  let latest = null;
+  cdp.on("Page.screencastFrame", (f) => { latest = Buffer.from(f.data, "base64"); cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {}); });
+  await cdp.send("Page.startScreencast", { format: "jpeg", quality: 94, maxWidth: size.width, maxHeight: size.height, everyNthFrame: 1 });
+  for (let i = 0; !latest && i < 100; i++) await page.waitForTimeout(50);
+  if (!latest) throw new Error("the browser sent no picture");
+  await page.waitForTimeout(400);
+  const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "mjpeg", "-i", "-", "-c:v", "copy", raw], { stdio: ["pipe", "inherit", "inherit"] });
+  const closed = new Promise((ok) => ff.on("close", ok));
+  const t0 = Date.now(); let written = 0;
+  const write = () => { const want = Math.floor((Date.now() - t0) / 1000 * FPS); while (written < want) { ff.stdin.write(latest); written++; } };
+  const ticker = setInterval(write, 8);
+  return { t0, async stop() { clearInterval(ticker); write(); await cdp.send("Page.stopScreencast").catch(() => {}); ff.stdin.end(); await closed; return written / FPS; } };
+}
+// Turns the raw capture into the finished MP4: H.264 with correct colors and a silent sound track.
+function encode(raw, out) {
+  const { spawnSync } = require("child_process");
+  const enc = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", raw, "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-shortest",
+    "-vf", "scale=in_range=full:in_color_matrix=bt601:out_range=tv:out_color_matrix=bt709,format=yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+    "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-r", String(FPS), "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", out], { stdio: "inherit" });
+  if (enc.status !== 0) throw new Error(`encoding ${out} failed`);
+  fs.unlinkSync(raw);
+}
+
+module.exports = { ROOT, BASE, OUT, BRANDS, FPS, launch, route, receiptText, capture, encode };
