@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How-to video stage</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&family=Jost:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap">
+<style>
+/* The frame of the how-to video: a caption, the phone screen with the real app inside it, and the title, home-screen
+   and closing cards. video/record.js drives it. ?brand=grfl|lp1 and ?shape=vertical|landscape choose the look. */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: var(--body); }
+body.grfl { --bg: #12171b; --text: #e8ece9; --soft: #b4bcc2; --dim: #8d979e; --accent: #f0c000; --pill: #f0c000; --pill-ink: #1d1700; --track: #2a333a; --screen: #eef0ee;
+  --display: "Saira Condensed", "Arial Narrow", sans-serif; --body: Barlow, "Segoe UI", sans-serif; --h-weight: 700; --title: #ffffff; }
+body.lp1 { --bg: #111111; --text: #f2f2f2; --soft: #c8caca; --dim: #9b9d9d; --accent: #ff4f33; --pill: #ffffff; --pill-ink: #111111; --track: #2e3030; --screen: #f5f5f5;
+  --display: Poppins, "Segoe UI", sans-serif; --body: Jost, "Segoe UI", sans-serif; --h-weight: 600; --title: #ffffff; }
+
+.stage { position: relative; width: 100vw; height: 100vh; display: flex; }
+.progress { display: flex; gap: var(--seg-gap); flex: none; }
+.progress span { flex: 1; height: var(--seg-h); border-radius: var(--seg-h); background: var(--track); transition: background .3s; }
+.progress span.on { background: var(--accent); }
+.caption { display: flex; flex-direction: column; align-items: flex-start; gap: var(--cap-gap); transition: opacity .22s; }
+.caption.out { opacity: 0; }
+.pill { font: 700 var(--pill-size)/1 var(--body); letter-spacing: .1em; text-transform: uppercase; background: var(--pill); color: var(--pill-ink); padding: .42em .7em; border-radius: .34em; }
+h1 { margin: 0; font: var(--h-weight) var(--h-size)/var(--h-line) var(--display); color: var(--title); }
+.caption p { margin: 0; font: 400 var(--p-size)/1.36 var(--body); color: var(--soft); max-width: var(--p-max); }
+.phone { position: relative; flex: none; width: calc(390px * var(--scale)); height: calc(844px * var(--scale)); border-radius: var(--radius); overflow: hidden; background: var(--screen);
+  box-shadow: 0 0 0 var(--bezel) var(--track); }
+.phone iframe { width: 390px; height: 844px; border: 0; display: block; transform: scale(var(--scale)); transform-origin: 0 0; }
+.brandline { display: flex; align-items: center; gap: 22px; font: 600 34px/1 var(--display); letter-spacing: .08em; color: var(--dim); }
+.brandline img { height: 40px; width: auto; display: block; }
+.brandline small { font: 600 24px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; }
+
+/* vertical: 1080 x 1920 */
+body.vertical { --scale: 1.5385; --radius: 52px; --bezel: 10px; --seg-h: 8px; --seg-gap: 12px; --cap-gap: 18px; --pill-size: 28px; --p-size: 40px; --p-max: none; }
+body.vertical.grfl { --h-size: 88px; --h-line: 1.05; }
+body.vertical.lp1 { --h-size: 64px; --h-line: 1.15; }
+body.vertical .stage { flex-direction: column; gap: 36px; padding: 56px 60px 0; }
+body.vertical .caption { height: 392px; flex: none; }
+body.vertical .phone { align-self: center; }
+body.vertical .left { display: contents; }
+body.vertical .brandline { display: none; }
+
+/* landscape: 1920 x 1080 */
+body.landscape { --scale: 1.1385; --radius: 44px; --bezel: 8px; --seg-h: 8px; --seg-gap: 12px; --cap-gap: 28px; --pill-size: 30px; --p-size: 46px; --p-max: 1060px; }
+body.landscape.grfl { --h-size: 124px; --h-line: 1; }
+body.landscape.lp1 { --h-size: 90px; --h-line: 1.1; }
+body.landscape .stage { align-items: center; gap: 96px; padding: 60px 120px 60px 96px; }
+body.landscape .left { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
+body.landscape .progress { width: 600px; }
+body.landscape .caption { margin-top: 150px; }
+body.landscape .brandline { margin-top: auto; }
+
+/* things that sit on the phone screen */
+.panel { position: absolute; inset: 0; background: var(--bg); color: var(--text); display: flex; flex-direction: column; justify-content: center; gap: calc(44px * var(--k)); padding: calc(56px * var(--k));
+  opacity: 0; pointer-events: none; transition: opacity .3s; }
+.panel.on { opacity: 1; }
+body.vertical { --k: 1.18; } body.landscape { --k: .86; }
+.panel .url { font: 600 calc(44px * var(--k))/1.2 var(--display); color: var(--accent); letter-spacing: .01em; }
+.panel .how { display: flex; flex-direction: column; gap: calc(16px * var(--k)); }
+.panel .how b { font: 600 calc(24px * var(--k))/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--soft); }
+.panel .how div { display: flex; align-items: center; gap: calc(20px * var(--k)); font: 500 calc(36px * var(--k))/1.3 var(--body); }
+.panel .how svg { width: calc(54px * var(--k)); height: calc(54px * var(--k)); flex: none; }
+.camera { position: absolute; inset: 0; background: rgba(8, 10, 12, .9); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.camera.on { opacity: 1; }
+.camera .paper { width: 62%; background: #fbfaf5; color: #1b1b1b; padding: 7% 6%; font: 500 calc(21px * var(--k))/1.5 "Courier New", ui-monospace, monospace; box-shadow: 0 18px 50px rgba(0, 0, 0, .5); transform: rotate(-2deg) translateY(30px); transition: transform .5s; white-space: pre; }
+.camera.on .paper { transform: rotate(-2deg) translateY(0); }
+.camera .paper b { display: block; text-align: center; font-size: 1.15em; }
+.camera .corner { position: absolute; width: 9%; aspect-ratio: 1; border: calc(5px * var(--k)) solid #ffffff; }
+.camera .corner.a { top: 14%; left: 11%; border-right: 0; border-bottom: 0; } .camera .corner.b { top: 14%; right: 11%; border-left: 0; border-bottom: 0; }
+.camera .corner.c { bottom: 14%; left: 11%; border-right: 0; border-top: 0; } .camera .corner.d { bottom: 14%; right: 11%; border-left: 0; border-top: 0; }
+.camera.flash::after { content: ""; position: absolute; inset: 0; background: #ffffff; animation: flash .35s ease-out forwards; }
+@keyframes flash { from { opacity: .85; } to { opacity: 0; } }
+
+/* a finger tap, and a ring that points something out */
+.tap { position: fixed; width: var(--tap); height: var(--tap); margin: calc(var(--tap) / -2) 0 0 calc(var(--tap) / -2); border-radius: 50%; background: rgba(255, 255, 255, .55); box-shadow: 0 0 0 3px rgba(0, 0, 0, .35); pointer-events: none; animation: tap .55s ease-out forwards; z-index: 30; }
+body.vertical { --tap: 84px; } body.landscape { --tap: 64px; }
+@keyframes tap { 0% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+.ring { position: fixed; border: 6px solid var(--accent); border-radius: 22px; pointer-events: none; animation: ring 1.8s ease-in-out forwards; z-index: 29; }
+@keyframes ring { 0% { opacity: 0; transform: scale(1.04); } 20%, 75% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+
+/* title and closing cards fill the whole frame */
+.card { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: calc(34px * var(--c)); padding: 0 calc(110px * var(--c)); opacity: 0; pointer-events: none; transition: opacity .35s; z-index: 40; }
+.card.on { opacity: 1; }
+body.vertical { --c: 1; } body.landscape { --c: 1.15; }
+body.landscape .card { padding-left: 180px; }
+.card .mark { font: 700 calc(150px * var(--c))/1 var(--display); letter-spacing: .03em; color: var(--accent); }
+.card img.logo { width: calc(560px * var(--c)); height: auto; display: block; }
+.card .name { font: 700 calc(96px * var(--c))/1 var(--display); color: #ffffff; }
+.card .big { font: var(--h-weight) calc(92px * var(--c))/1.05 var(--display); color: #ffffff; }
+body.lp1 .card .big { font-size: calc(68px * var(--c)); color: var(--accent); }
+.card .sub { font: 400 calc(40px * var(--c))/1.4 var(--body); color: var(--soft); }
+.card .label { font: 600 calc(26px * var(--c))/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--soft); }
+.card .list { display: flex; flex-direction: column; gap: calc(14px * var(--c)); font: 500 calc(46px * var(--c))/1.25 var(--body); color: var(--text); }
+.card .url { font: 600 calc(58px * var(--c))/1.1 var(--display); color: var(--accent); letter-spacing: .01em; }
+.card .fine { font: 400 calc(28px * var(--c))/1.4 var(--body); color: var(--dim); max-width: 21em; }
+.card .done { font: 700 calc(130px * var(--c))/1 var(--display); color: var(--accent); }
+body.lp1 .card .done { font-size: calc(100px * var(--c)); color: #ffffff; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="left">
+    <div class="progress" id="progress"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="caption out" id="caption"><span class="pill" id="pill"></span><h1 id="title"></h1><p id="text"></p></div>
+    <div class="brandline" id="brandline"></div>
+  </div>
+  <div class="phone" id="phone">
+    <iframe id="app" title="The app"></iframe>
+    <div class="panel" id="home">
+      <span class="url" id="homeUrl"></span>
+      <div class="how"><b>iPhone · Safari</b><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"></path></svg><span>Share, then Add to Home Screen</span></div></div>
+      <div class="how"><b>Android · Chrome</b><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v.01M12 12v.01M12 19v.01"></path></svg><span>Menu, then Add to Home screen</span></div></div>
+    </div>
+    <div class="camera" id="camera"><span class="corner a"></span><span class="corner b"></span><span class="corner c"></span><span class="corner d"></span><div class="paper" id="paper"></div></div>
+  </div>
+  <div class="card on" id="open"></div>
+  <div class="card" id="close"></div>
+</div>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const brand = q.get("brand") === "lp1" ? "lp1" : "grfl", shape = q.get("shape") === "landscape" ? "landscape" : "vertical";
+  document.body.className = brand + " " + shape;
+  const $ = (id) => document.getElementById(id);
+  const B = {
+    grfl: { page: "../index.html", homeUrl: "fuel.shadyacres.my", brandline: "GR FUEL LOG",
+      open: '<span class="mark">GR FUEL LOG</span><span class="big">How to use it</span><span class="sub">Six steps. About a minute.</span>',
+      close: '<span class="done">That\'s it.</span><span class="label">Also inside</span><div class="list"><span>Service reminders</span><span>Your fill history</span><span>Community numbers</span></div><span class="url">fuel.shadyacres.my</span><span class="sub">Free. No ads.</span>' },
+    lp1: { page: "../limitplus1/index.html", homeUrl: "Your link from LIMIT+1", brandline: '<img src="../limitplus1/logo-white.png" alt="LIMIT+1"><small>Flex Fuel</small>',
+      open: '<img class="logo" src="../limitplus1/logo-white.png" alt="LIMIT+1"><span class="name">Flex Fuel</span><span class="big">How to use it</span><span class="sub">Six steps. About a minute.</span>',
+      close: '<span class="done">That\'s it.</span><span class="label">Also inside</span><div class="list"><span>Service reminders</span><span>Your fill history</span><span>Community numbers</span><span>LIMIT+1, one tap away</span></div><img class="logo" style="width:calc(330px * var(--c))" src="../limitplus1/logo-white.png" alt="LIMIT+1"><span class="sub">Powered by Shady Acres LLC</span><span class="fine">A concept by Shady Acres LLC. Not an official LIMIT+1 product.</span>' },
+  }[brand];
+  $("open").innerHTML = B.open; $("close").innerHTML = B.close; $("homeUrl").textContent = B.homeUrl; $("brandline").innerHTML = B.brandline;
+  $("app").src = B.page;
+
+  window.stage = {
+    card(name) { $("open").classList.toggle("on", name === "open"); $("close").classList.toggle("on", name === "close"); },
+    // The caption for a step: fades out, changes, fades back in.
+    step(n, title, text) {
+      const c = $("caption"); c.classList.add("out");
+      setTimeout(() => {
+        $("pill").textContent = "Step " + n; $("title").textContent = title; $("text").textContent = text;
+        [...$("progress").children].forEach((s, i) => s.classList.toggle("on", i < n));
+        c.classList.remove("out");
+      }, 230);
+    },
+    home(on) { $("home").classList.toggle("on", !!on); },
+    receipt(on, text) {
+      const cam = $("camera");
+      if (on) { const lines = String(text).split("\n"); $("paper").innerHTML = "<b></b>"; $("paper").firstChild.textContent = lines[0]; $("paper").appendChild(document.createTextNode(lines.slice(1).join("\n"))); cam.classList.remove("flash"); cam.classList.add("on"); }
+      else cam.classList.remove("on", "flash");
+    },
+    snap() { $("camera").classList.add("flash"); },
+    tap(x, y) { const d = document.createElement("div"); d.className = "tap"; d.style.left = x + "px"; d.style.top = y + "px"; document.body.appendChild(d); setTimeout(() => d.remove(), 700); },
+    ring(x, y, w, h) { const d = document.createElement("div"); d.className = "ring"; const p = 10; Object.assign(d.style, { left: x - p + "px", top: y - p + "px", width: w + 2 * p + "px", height: h + 2 * p + "px" }); document.body.appendChild(d); setTimeout(() => d.remove(), 1900); },
+  };
+})();
+</script>
+</body>
+</html>

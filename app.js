@@ -11,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 34, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 35, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -74,7 +74,10 @@
     setTimeout(async () => {
       const [c, ms, st] = await Promise.all([sb.from("car_model").select("*").eq("user_id", S.user.id).maybeSingle(), sb.from("my_stations").select("*"), sb.from("station_estimates").select("*")]);
       S.car = c.data || S.car; S.myStations = ms.data || S.myStations; S.stations = st.data || S.stations; S.community = null;
-      if (["pump", "learned", "community"].includes(S.view)) render();
+      // On the pump screen only the plan's numbers change, so redraw just those: a full redraw would drop the keyboard
+      // and wipe a reading being typed.
+      if (S.view === "pump" && !S.picker && $("#readout")) renderReadout();
+      else if (["pump", "learned", "community"].includes(S.view)) render();
     }, delay);
   }
   async function refreshQuota() { const q = await sb.rpc("receipt_quota"); if (q.data) S.quota = q.data; }

@@ -273,7 +273,7 @@ const W = path.resolve(__dirname, "..");
   await page.waitForSelector("text=E85 stations as of");
   const about = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
   log("8e about:", about);
-  if (!/Version 34/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
+  if (!/Version 35/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
   await shot("about");
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");
@@ -382,6 +382,15 @@ const W = path.resolve(__dirname, "..");
   const typedNow = await page.inputValue("#afterNow");
   log("16b after-fill box, typed -4 ->", typedNow);
   expect(typedNow === "4", "the after-fill box took a minus sign");
+  // The app refreshes what it learned a few seconds after a save. On the pump screen that must not drop the keyboard
+  // or wipe a reading being typed.
+  await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("button:has-text('Save')");
+  await page.click("form[data-form=saveCar] button[type=submit]"); await page.waitForSelector("h1:has-text('Pump plan')");
+  await page.click("#afterNow"); await page.keyboard.type("4");
+  await page.waitForTimeout(4700);
+  const kept = await page.evaluate(() => ({ focused: document.activeElement && document.activeElement.id, value: document.querySelector("#afterNow").value }));
+  log("16c typing through the learning refresh:", JSON.stringify(kept));
+  if (kept.focused !== "afterNow" || kept.value !== "4") throw new Error("the learning refresh dropped the keyboard or wiped the typed reading");
   await page.fill("#afterNow", "41"); await page.click("form.after-ask button[type=submit]");
   await page.waitForFunction(() => window.__db.fills[0].sensor_after === 41);
   await page.waitForFunction(() => !document.querySelector("form.after-ask"));
