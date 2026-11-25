@@ -90,13 +90,15 @@ async function record(browser, brand, shapeName) {
     await until(END.s2);
 
     // Step 3: set up the car
-    await stage("step", 3, ...steps[2]); await hold(800);
-    if (brand.id === "lp1") { await tap(app.locator("[data-k=model][data-v=grc]")); await app.locator("[data-k=year]").first().waitFor(); await hold(400); }
-    await tap(app.locator("[data-k=year][data-v='2024']")); await hold(450);
-    if (brand.id === "lp1") { await tap(app.locator("[data-k=pkg][data-v=kit]")); await hold(400); }
+    // LIMIT+1's setup has two more taps (car and package), so its pauses are shorter to fit the same ten seconds.
+    const k3 = brand.id === "lp1" ? 0.7 : 1;
+    await stage("step", 3, ...steps[2]); await hold(1200 * k3);
+    if (brand.id === "lp1") { await tap(app.locator("[data-k=model][data-v=grc]")); await app.locator("[data-k=year]").first().waitFor(); await hold(600 * k3); }
+    await tap(app.locator("[data-k=year][data-v='2024']")); await hold(900 * k3);
+    if (brand.id === "lp1") { await tap(app.locator("[data-k=pkg][data-v=kit]")); await hold(600 * k3); }
     await glide(app.locator("#c-e85"));
-    await tap(app.locator("#c-e85")); await app.locator('.srow:has-text("911 Tek Dr")').waitFor(); await hold(1000);
-    await tap(app.locator('.srow:has-text("911 Tek Dr")')); await app.locator("text=Set up your car").waitFor(); await hold(450);
+    await tap(app.locator("#c-e85")); await app.locator('.srow:has-text("911 Tek Dr")').waitFor(); await hold(1700 * k3);
+    await tap(app.locator('.srow:has-text("911 Tek Dr")')); await app.locator("text=Set up your car").waitFor(); await hold(900 * k3);
     await glide(app.locator("button:has-text('Save and start')"));
     await until(END.s3 - 0.9, "setup");
     await tap(app.locator("button:has-text('Save and start')")); await app.locator("h1:has-text('Pump plan')").waitFor();
