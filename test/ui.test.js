@@ -273,7 +273,7 @@ const W = path.resolve(__dirname, "..");
   await page.waitForSelector("text=E85 stations as of");
   const about = (await page.locator("#app").innerText()).replace(/\n+/g, " | ");
   log("8e about:", about);
-  if (!/Version 36/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
+  if (!/Version 37/.test(about) || !/7,056 E85 stations as of Nov 22, 2026/.test(about) || !/E85prices\.com, updated Nov 22, 2026: 6,316 stations listed, 2,239 of them not on the DOE list \(9 added, 0 removed\), 31 with a price/.test(about) || !/U\.S\. DOE, updated Nov 16, 2026: 4,817 stations \(5 added\)/.test(about)) throw new Error("About version or station summary wrong");
   await shot("about");
   await page.evaluate(() => { location.hash = "car"; }); await page.waitForSelector("text=Your data");
   await page.click("[data-act=clearPrimary][data-k=primaryGas]"); await page.waitForSelector("#toast:not([hidden])");

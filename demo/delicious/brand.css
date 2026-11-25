@@ -24,6 +24,8 @@
   --display: Oswald, "Arial Narrow", sans-serif; --body: Arimo, Arial, sans-serif; color-scheme: dark; }
 h1, h2, .btn.primary, .tabs span { text-transform: uppercase; letter-spacing: .04em; } h1 { font-weight: 500; }
 .brandbar img { height: 24px; } .signin .brandmark img, .brandmark img { height: 44px; }
+/* The look holds on a phone set to dark: undo the app's dark-mode chip text. */
+.chip.low, .chip.high, .chip.danger { color: #fff; } .chip.target { color: var(--go-ink); }
 .preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
 .preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 body.signin #app { min-height: calc(100svh - 30px); }

@@ -19,6 +19,8 @@ body.signin .soft, body.signin #app > p { color: #666666 !important; } body.sign
 body.signin .card { border: 1px solid #e2e2e2; } body.signin .fine { color: #666666; }
 .promo .sale, .promo .tag { color: #ffffff; } .promo .sep { background: #f0b3b3; }
 .brandbar img { height: 22px; } .signin .brandmark img, .brandmark img { height: 40px; }
+/* The look holds on a phone set to dark: undo the app's dark-mode chip text. */
+.chip.low, .chip.high, .chip.danger { color: #fff; } .chip.target { color: var(--go-ink); }
 .preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
 .preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 body.signin #app { min-height: calc(100svh - 30px); }

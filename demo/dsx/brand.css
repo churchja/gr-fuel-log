@@ -17,6 +17,8 @@
 h1, h2, .btn.primary { text-transform: uppercase; letter-spacing: .03em; } body { font-size: 15px; }
 .brandbar { background: #063980; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 10px 16px; border: 0; } .brandbar span { color: #c7d6ee; }
 .brandbar img { height: 20px; } .signin .brandmark img, .brandmark img { height: 34px; }
+/* The look holds on a phone set to dark: undo the app's dark-mode chip text. */
+.chip.low, .chip.high, .chip.danger { color: #fff; } .chip.target { color: var(--go-ink); }
 .preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }
 .preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 body.signin #app { min-height: calc(100svh - 30px); }

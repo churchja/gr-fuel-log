@@ -75,7 +75,7 @@ module.exports = {
         --display: Archivo, "Segoe UI", sans-serif; --body: Questrial, "Segoe UI", sans-serif; }
       .btn { border-radius: 41px; } .stepper { border-radius: 41px; }
       .brandbar { background: #010309; margin: calc(-1 * max(14px, env(safe-area-inset-top, 0px))) -16px 0; padding: 8px 16px; border: 0; } .brandbar span { color: #c9cde0; }
-      .brandbar img { height: 44px; margin-left: -14px; } .signin .brandmark img, .brandmark img { height: 92px; width: auto; margin: -16px 0 -18px 0; justify-self: start; }`,
+      .brandbar img { height: 44px; margin-left: -4px; } .signin .brandmark img, .brandmark img { height: 92px; width: auto; margin: -16px 0 -18px 0; justify-self: start; }`,
   },
   burger: {
     lookOnly: true, title: "Burger Motorsports", site: "https://burgertuning.com",

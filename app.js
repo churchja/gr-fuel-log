@@ -11,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 36, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 37, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -313,7 +313,7 @@
     if (v === null || v < 0 || v > 100) { toast("Enter the sensor reading, from 0 to 100."); return; }
     const { error } = await sb.from("fills").update({ sensor_after: v }).eq("id", f.id);
     if (error) { toast(S.offline ? "You're offline. Save again once you have a signal." : "Couldn't save. Check your connection and try again."); return; }
-    S.pump.sensor = String(v); S.flash = "Reading saved. The app is learning from it now.";
+    S.pump.sensor = String(v); S.flash = "Reading saved.";
     await reloadFills(); refreshLearning(); render();
   }
   function currentPlan() {
@@ -530,7 +530,7 @@
     const res = f.id ? await sb.from("fills").update(row).eq("id", f.id) : await sb.from("fills").insert(row);
     if (res.error) return fail(S.offline ? "You're offline. Save again once you have a signal." : "Couldn't save. Check your connection and try again.");
     // Saved: this replaces a "Station set · Undo" note for one of the form's stops, which has nothing left to undo.
-    S.form = null; toast(f.id ? "Fill updated." : "Fill saved. The app is learning from it now.");
+    S.form = null; toast(f.id ? "Fill updated." : "Fill saved.");
     await reloadFills();
     // Service reminders count from the first odometer reading the app has for this car.
     if (odo && num(S.settings.serviceStart) === null) await saveSettings({ ...S.settings, serviceStart: odo });
@@ -1085,13 +1085,20 @@
   }
 
   // ---------- undo bar ----------
+  // A short note at the bottom of the screen. A plain one leaves after 4 seconds, or as soon as the member taps or
+  // scrolls; one with Undo stays 7 seconds, since the member may still want it.
   function toast(text, actLabel, fn) {
     let el = $("#toast");
-    if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
-    clearTimeout(toast.t); toast.fn = fn || null;
+    if (!el) {
+      el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el);
+      const away = (e) => { if (el.hidden || toast.fn || (e.type === "scroll" && Date.now() - toast.at < 900) || (e.target && e.target.closest && e.target.closest("#toast"))) return; el.hidden = true; };
+      document.addEventListener("pointerdown", away, true); window.addEventListener("scroll", away, { passive: true });
+      el.addEventListener("click", (e) => { if (!e.target.closest("[data-act]")) { el.hidden = true; toast.fn = null; } });
+    }
+    clearTimeout(toast.t); toast.fn = fn || null; toast.at = Date.now(); // a page change scrolls to the top: that is not the member scrolling
     el.innerHTML = `<span>${esc(text)}</span>${actLabel ? `<button type="button" class="link" data-act="toastAct">${esc(actLabel)}</button>` : ""}`;
     el.hidden = false;
-    toast.t = setTimeout(() => { el.hidden = true; toast.fn = null; }, 10000);
+    toast.t = setTimeout(() => { el.hidden = true; toast.fn = null; }, actLabel ? 7000 : 4000);
   }
 
   // ---------- stations ----------

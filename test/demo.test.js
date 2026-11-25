@@ -23,7 +23,7 @@ const W = path.resolve(__dirname, ".."), BRANDS = require("../demos/brands");
     await page.waitForSelector("[data-act=previewStart]");
     const ribbon = await page.locator(".preview-ribbon").innerText();
     const logo = await page.locator(".brandmark img").evaluate((i) => i.complete && i.naturalWidth > 0);
-    expect((b.lookOnly ? /Demo · look only, GR Corolla sample data/ : /Demo · sample data, nothing is saved/).test(ribbon) && logo && !(await page.locator("#email").count()), "welcome should show the ribbon and logo, with no sign-in");
+    expect((b.lookOnly ? /Demo · GR Corolla sample data/ : /Demo · sample data, nothing is saved/).test(ribbon) && logo && !(await page.locator("#email").count()), "welcome should show the ribbon and logo, with no sign-in");
     expect(await page.title() === `${b.partner.name} · Demo` && await page.getAttribute("meta[name=robots]", "content") === "noindex, nofollow", "title or noindex wrong");
     expect(new RegExp(b.title).test(await page.locator("p.fine").innerText()), "the concept note should name the company");
     await page.click("[data-act=previewStart]"); await page.waitForSelector("text=Set up your car");

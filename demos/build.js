@@ -17,7 +17,7 @@ for (const [id, b] of Object.entries(BRANDS)) {
   if (!fs.existsSync(path.join(dir, logo))) execFileSync("curl", ["-s", "-f", "-o", path.join(dir, logo), b.logo]);
   const partner = { ...b.partner, demo: true, logo: { light: logo, dark: logo, alt: b.title } };
   fs.writeFileSync(path.join(dir, "partner.js"), `// ${b.title}: a demo of the app in their look, made to show them. Built by demos/build.js from demos/brands.js.\nwindow.PARTNER = ${JSON.stringify(partner, null, 2)};\n`);
-  fs.writeFileSync(path.join(dir, "brand.css"), `/* ${b.title}'s look, read from ${b.site}. Built by demos/build.js. */\n@import url("https://fonts.googleapis.com/css2?${b.fonts}&display=swap");\n${BASE.light}\n${b.scheme === "dark" ? BASE.dark + "\n" : ""}${b.css.replace(/^ {6}/gm, "")}\n.preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }\n.preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }\nbody.signin #app { min-height: calc(100svh - 30px); }\n`);
+  fs.writeFileSync(path.join(dir, "brand.css"), `/* ${b.title}'s look, read from ${b.site}. Built by demos/build.js. */\n@import url("https://fonts.googleapis.com/css2?${b.fonts}&display=swap");\n${BASE.light}\n${b.scheme === "dark" ? BASE.dark + "\n" : ""}${b.css.replace(/^ {6}/gm, "")}\n/* The look holds on a phone set to dark: undo the app's dark-mode chip text. */\n.chip.low, .chip.high, .chip.danger { color: #fff; } .chip.target { color: var(--go-ink); }\n.preview-ribbon { background: var(--brand); color: #fff; font: 500 13px/1.3 var(--body); text-align: center; padding: max(6px, env(safe-area-inset-top, 0px)) 12px 6px; }\n.preview-ribbon a { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }\nbody.signin #app { min-height: calc(100svh - 30px); }\n`);
   fs.writeFileSync(path.join(dir, "index.html"), `<!doctype html>
 <html lang="en"${b.scheme === "dark" ? ' style="color-scheme: dark"' : ""}>
 <head>
@@ -32,7 +32,7 @@ for (const [id, b] of Object.entries(BRANDS)) {
 <link rel="stylesheet" href="brand.css?v=${V}">
 </head>
 <body class="partner">
-<div class="preview-ribbon" role="note"><b>Demo</b> · ${b.lookOnly ? "look only, GR Corolla sample data" : "sample data, nothing is saved"} · <a href="./" data-preview-reset>Start over</a></div>
+<div class="preview-ribbon" role="note"><b>Demo</b> · ${b.lookOnly ? "GR Corolla sample data" : "sample data, nothing is saved"} · <a href="./" data-preview-reset>Start over</a></div>
 <main id="app" aria-live="polite"><p class="muted">Loading…</p></main>
 <div class="tabs" id="tabs" hidden></div>
 <noscript>${b.partner.name} needs JavaScript turned on.</noscript>
