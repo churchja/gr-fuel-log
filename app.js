@@ -11,7 +11,7 @@
   const num = C.num;
   const today = () => new Date().toLocaleDateString("en-CA");
   const fmtDate = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-  const APP_VERSION = 31, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
+  const APP_VERSION = 32, APP_DATE = "2026-11-25"; // bump with the ?v= numbers in index.html and sw.js
   const fmtShort = (d) => { if (!d) return ""; const [y, m, dd] = String(d).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const money = (x) => x === null || x === undefined ? "—" : "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const miles = (x) => Math.round(x).toLocaleString("en-US");
@@ -510,7 +510,8 @@
       target: num(f.target), stops, plan: f.plan, notes: String(f.notes || "").trim() || null };
     const res = f.id ? await sb.from("fills").update(row).eq("id", f.id) : await sb.from("fills").insert(row);
     if (res.error) return fail(S.offline ? "You're offline. Save again once you have a signal." : "Couldn't save. Check your connection and try again.");
-    S.form = null; S.flash = f.id ? "Fill updated." : "Fill saved. The app is learning from it now.";
+    // Saved: this replaces a "Station set · Undo" note for one of the form's stops, which has nothing left to undo.
+    S.form = null; toast(f.id ? "Fill updated." : "Fill saved. The app is learning from it now.");
     await reloadFills();
     // Service reminders count from the first odometer reading the app has for this car.
     if (odo && num(S.settings.serviceStart) === null) await saveSettings({ ...S.settings, serviceStart: odo });
@@ -1002,7 +1003,8 @@
     if (!(await saveSettings(s, String(f.handle || "").trim()))) return fail("Couldn't save. Check your connection and try again.");
     if (first && P && P.preview) await loadAll(); // the preview's sample log appears once a car is set up
     if (s.year && info.car && !info.checked) sb.rpc("report_unchecked_year", { p_model: carModel(), p_year: s.year }).then(() => {}, () => {});
-    S.carForm = null; S.setupDone = true; S.flash = "Settings saved."; refreshLearning(4000); go("pump");
+    // Saved: this replaces a "Station set · Undo" note from the form, which would otherwise cover the pump plan.
+    S.carForm = null; S.setupDone = true; toast("Settings saved."); refreshLearning(4000); go("pump");
   }
 
   // ---------- admin ----------

@@ -57,7 +57,12 @@ const W = path.resolve(__dirname, "..");
   await page.click('.srow:has-text("911 Tek Dr")'); await page.waitForSelector("text=Set up your car");
   await page.fill("#c-forum", "grc_preview");
   await shot("setup");
+  const pickedNote = await page.locator("#toast").innerText();
   await page.click("button:has-text('Save and start')"); await page.waitForSelector("h1:has-text('Pump plan')");
+  // Saving replaces the "Station set · Undo" note, so it doesn't cover the pump plan with nothing left to undo
+  const savedNote = await page.locator("#toast").innerText();
+  log("2b note before save:", pickedNote.replace(/\n+/g, " "), "| after:", savedNote.replace(/\n+/g, " "));
+  expect(/Station set to Thorntons · 911 Tek Dr/.test(pickedNote) && /^Settings saved\.$/.test(savedNote.trim()), "the saved note should replace the Undo note");
 
   // 3 Pump: the sample log is in, the sensor box holds the last blend, and the oil change is coming due
   const pump = await text(), sensor = await page.inputValue("#sensor");
@@ -110,7 +115,7 @@ const W = path.resolve(__dirname, "..");
   await go("about", "text=E85 stations as of");
   const about = await text();
   log("8 about:", about.slice(0, 300));
-  expect(/Version 31/.test(about) && /Call 815-345-3035/.test(about), "About page wrong");
+  expect(/Version 32/.test(about) && /Call 815-345-3035/.test(about), "About page wrong");
 
   // 9 A reload keeps the tab's preview; Start over wipes it
   await page.reload(); await page.waitForSelector(".brandbar");

@@ -250,19 +250,23 @@
   };
   const later = (v) => new Promise((ok) => setTimeout(() => ok(v), 60)); // a moment, like a real request
   function from(table) {
-    const st = { op: "select", payload: null, filters: [], one: false };
+    const st = { op: "select", payload: null, filters: [], one: false, sort: [] };
     const api = {
-      select() { return api; }, order() { return api; }, limit() { return api; }, neq() { return api; },
+      select() { return api; }, order(c) { st.sort.push(c); return api; }, limit() { return api; }, neq() { return api; },
       eq(c, v) { st.filters.push([c, v]); return api; },
       single() { st.one = true; return api; }, maybeSingle() { st.one = true; return api; },
       insert(row) { st.op = "insert"; st.payload = row; return api; }, update(p) { st.op = "update"; st.payload = p; return api; }, delete() { st.op = "delete"; return api; },
       then(ok, bad) { return later(run()).then(ok, bad); },
     };
     const match = (r) => st.filters.every(([c, v]) => r[c] === v);
+    // Sorted like the database does it: ascending, empty values last.
+    const cmp = (x, y) => (x === y ? 0 : x === null || x === undefined ? 1 : y === null || y === undefined ? -1
+      : typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y)));
+    const sorted = (out) => (st.sort.length ? out.sort((a, b) => { for (const c of st.sort) { const d = cmp(a[c], b[c]); if (d) return d; } return 0; }) : out);
     function run() {
       if (!D.session) return { data: null, error: { message: "Not signed in" } };
       const rows = TABLES[table] ? TABLES[table]() : [];
-      if (st.op === "select") { const out = clone(rows.filter(match)); return { data: st.one ? out[0] || null : out, error: null }; }
+      if (st.op === "select") { const out = sorted(clone(rows.filter(match))); return { data: st.one ? out[0] || null : out, error: null }; }
       if (st.op === "insert") {
         const r = { ...clone(st.payload), id: st.payload.id || "p" + D.next++, user_id: UID };
         if (table === "fills" || table === "oil_changes") D[table].push(r);
