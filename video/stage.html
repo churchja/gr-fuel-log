@@ -133,7 +133,10 @@ body.lp1 .card .done { font-size: calc(100px * var(--c)); color: #ffffff; }
 <script>
 (function () {
   const q = new URLSearchParams(location.search);
-  const brand = q.get("brand") === "lp1" ? "lp1" : "grfl", shape = q.get("shape") === "landscape" ? "landscape" : "vertical";
+  // A demo company's sales slides (video/sales-slides.js sets window.DEMO_BRAND): the LIMIT+1 frame with that company's
+  // logo, name and accent color. A logo made for a light page sits on a light plate.
+  const D = window.DEMO_BRAND || null;
+  const brand = D || q.get("brand") === "lp1" ? "lp1" : "grfl", shape = q.get("shape") === "landscape" ? "landscape" : "vertical";
   const sales = q.get("kind") === "sales";
   document.body.className = brand + " " + shape + (sales ? " sales" : "");
   const $ = (id) => document.getElementById(id);
@@ -148,6 +151,20 @@ body.lp1 .card .done { font-size: calc(100px * var(--c)); color: #ffffff; }
   if (sales) {
     B.open = '<img class="logo" src="../limitplus1/logo-white.png" alt="LIMIT+1"><span class="name">Flex Fuel</span><span class="big">An app for your flex fuel customers</span><span class="sub">Built by one of them.</span>';
     B.close = '<span class="talk">Try the preview, then let\'s talk.</span><span class="link">fuel.shadyacres.my/limitplus1/preview</span><div class="who"><b>Jason Church</b><span>Shady Acres LLC</span><span>jason.a.church@shadyacres.my</span></div><span class="fine">A concept by Shady Acres LLC. Not an official LIMIT+1 product.</span>';
+  }
+  if (D) {
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const src = `../demo/${D.id}/${D.logo}`, fit = "width:auto;object-fit:contain;object-position:left center;";
+    const logo = (h, w) => { const img = `<img src="${src}" alt="${esc(D.name)}" style="${fit}height:calc(${h}px * var(--c, 1));max-width:calc(${w}px * var(--c, 1));display:block">`;
+      return D.plate ? `<span style="display:inline-flex;background:${D.plate};border-radius:calc(${h / 5}px * var(--c, 1));padding:calc(${h / 5}px * var(--c, 1)) calc(${h / 3.4}px * var(--c, 1))">${img}</span>` : img; };
+    document.body.style.setProperty("--accent", D.accent);
+    const n = parseInt(D.accent.slice(1), 16), lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    const st = document.createElement("style"); st.textContent = `.pill[data-kind="limit"] { color: ${lum > 0.5 ? "#111111" : "#ffffff"}; }`; document.head.appendChild(st);
+    B.page = `../demo/${D.id}/index.html`;
+    const k = D.scale || 1;
+    B.brandline = `${logo(34 * k, 260)}<small>Flex Fuel</small>`;
+    B.open = `${logo(110 * k, 640)}<span class="name">Flex Fuel</span><span class="big">An app for your flex fuel customers</span><span class="sub">Built by a GR Corolla owner who runs E85.</span>`;
+    B.close = `<span class="talk">Try the demo, then let's talk.</span><span class="link">fuel.shadyacres.my/demo/${D.id}</span><div class="who"><b>Jason Church</b><span>Shady Acres LLC</span><span>jason.a.church@shadyacres.my</span></div><span class="fine">A concept by Shady Acres LLC. Not an official ${esc(D.name)} product.</span>`;
   }
   $("open").innerHTML = B.open; $("close").innerHTML = B.close; $("homeUrl").textContent = B.homeUrl; $("brandline").innerHTML = B.brandline;
   $("app").src = B.page;

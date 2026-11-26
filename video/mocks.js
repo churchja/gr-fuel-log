@@ -14,29 +14,30 @@ const tuner = (f) => f.evaluate(() => {
 });
 
 // On a service's own page (opened from Service): a link to the parts in LIMIT+1's store.
-const shop = (f) => f.evaluate(() => {
+const shop = (f, name = "LIMIT+1") => f.evaluate((name) => {
   const due = document.querySelector("#app section.dark");
   const box = document.createElement("section");
   box.className = "card"; box.id = "mock-shop";
-  box.innerHTML = `<h2>Parts for this service</h2><p class="small muted">Oil and filter that fit your 2024 GR Corolla, from LIMIT+1.</p>
-    <a class="btn primary full" href="#service" style="text-decoration:none">Shop oil change parts at LIMIT+1</a>`;
+  box.innerHTML = `<h2>Parts for this service</h2><p class="small muted">Oil and filter that fit your 2024 GR Corolla, from ${name}.</p>
+    <a class="btn primary full" href="#service" style="text-decoration:none">Shop oil change parts at ${name}</a>`;
   due.after(box);
   window.scrollTo(0, 0);
-});
+}, name);
 
 // On Your car and settings: the GR Supra offered like the other cars.
-const cars = (f) => f.evaluate(() => {
+const cars = (f, label = "GR Supra") => f.evaluate((label) => {
   const seg = document.querySelector('#app [aria-label="Model"]');
   const b = document.createElement("button");
-  b.type = "button"; b.setAttribute("aria-pressed", "false"); b.textContent = "GR Supra";
+  b.type = "button"; b.setAttribute("aria-pressed", "false"); b.textContent = label;
   seg.appendChild(b);
   const soon = [...seg.parentElement.querySelectorAll("span.small")].find((x) => /coming soon/.test(x.textContent));
   if (soon) soon.textContent = "Any car you sell a flex fuel kit for can be added.";
   window.scrollTo(0, 0);
-});
+}, label);
 
 // On History: a sheet with an image of the owner's month, ready to share.
-const share = (f) => f.evaluate(() => {
+// `b` (a demo company): { name, logo, plate }.
+const share = (f, b = null) => f.evaluate((b) => {
   const stat = (v, k) => `<div><b style="font:700 32px/1 var(--display)">${v}</b><br><span style="font-size:13px;color:#c8caca">${k}</span></div>`;
   const sheet = document.createElement("div");
   sheet.id = "mock-share";
@@ -44,10 +45,10 @@ const share = (f) => f.evaluate(() => {
   sheet.innerHTML = `<div style="background:var(--bg);width:100%;border-radius:18px 18px 0 0;padding:20px 16px 22px;display:grid;gap:14px">
     <b style="font:600 19px/1.2 var(--display)">Share my month</b>
     <div style="background:#111111;color:#ffffff;border-radius:14px;padding:22px;display:grid;gap:16px">
-      <img src="logo-white.png" alt="LIMIT+1" style="height:24px;width:auto;justify-self:start">
+      ${b ? `<span style="justify-self:start;display:inline-flex;${b.plate ? `background:${b.plate};border-radius:6px;padding:6px 9px` : ""}"><img src="${b.logo}" alt="" style="height:24px;width:auto;max-width:220px;object-fit:contain;object-position:left center;display:block"></span>` : '<img src="logo-white.png" alt="LIMIT+1" style="height:24px;width:auto;justify-self:start">'}
       <span style="font:600 12px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:#c8caca">My November on flex fuel</span>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${stat("E40", "average blend")}${stat("23.5", "MPG")}${stat("$0.132", "per mile")}${stat("5 of 5", "fills on target")}</div>
-      <span style="font-size:14px;color:#c8caca">2024 GR Corolla · LIMIT+1 flex fuel kit</span>
+      <span style="font-size:14px;color:#c8caca">2024 GR Corolla · ${b ? b.name : "LIMIT+1"} flex fuel kit</span>
     </div>
     <button type="button" class="btn primary full">Share</button>
   </div>`;
@@ -56,7 +57,7 @@ const share = (f) => f.evaluate(() => {
   sheet.style.opacity = "0"; sheet.style.transition = "opacity .25s"; panel.style.transform = "translateY(100%)"; panel.style.transition = "transform .32s ease-out";
   document.body.appendChild(sheet);
   requestAnimationFrame(() => requestAnimationFrame(() => { sheet.style.opacity = "1"; panel.style.transform = "none"; }));
-});
+}, b);
 
 const clear = (f) => f.evaluate(() => document.querySelectorAll("#mock-tuner, #mock-shop, #mock-share").forEach((x) => x.remove()));
 
